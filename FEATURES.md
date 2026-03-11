@@ -1,6 +1,6 @@
 # RKNPU Feature Status — ODROID-M1 (RK3568)
 
-**Kernel:** 6.18.9-current-rockchip64 (Armbian)
+**Kernel:** Armbian mainline, May 2026 release stream or newer (tested on `6.18.9-current-rockchip64`)
 **Driver:** RKNPU v0.9.8 (DKMS)
 **Board:** ODROID-M1, 8 GB LPDDR4
 **NPU:** 0.8 TOPS RKNN @ INT8
@@ -12,7 +12,7 @@
 | # | Feature | Makefile Flag | Compiled | Runtime Status | Notes |
 |---|---------|--------------|----------|----------------|-------|
 | 1 | Core DKMS driver | `-DRKNPU_DKMS` | ✅ | ✅ Working | Base driver, always enabled |
-| 2 | DRM/GEM buffers | `-DCONFIG_ROCKCHIP_RKNPU_DRM_GEM` | ✅ | ✅ Working | `/dev/dri/renderD129` present |
+| 2 | DRM render node | `-DCONFIG_ROCKCHIP_RKNPU_DRM_GEM` | ✅ | ⚠ Present | `/dev/dri/renderD129` present; dedicated GEM userspace path needs separate validation |
 | 3 | Misc device `/dev/rknpu` | `-DRKNPU_DKMS_MISCDEV_ENABLED -DRKNPU_DKMS_MISCDEV` | ✅ | ✅ Working | Direct alloc + DMA-BUF import (full mode) |
 | 4 | Fence sync | `-DCONFIG_ROCKCHIP_RKNPU_FENCE` | ✅ | ✅ Working | DRM syncobj/sync_file support |
 | 5 | Procfs `/proc/rknpu/` | `-DCONFIG_ROCKCHIP_RKNPU_PROC_FS` | ✅ | ✅ Working | 8 entries: version, freq, load, power, volt, mm, reset, delayms |
@@ -40,16 +40,18 @@
 
 ---
 
-## 8 GB RAM Support (2-Layer Fix)
+## Armbian Support
 
-| # | Layer | Status | Notes |
-|---|-------|--------|-------|
-| 20 | Kernel IOMMU `GFP_DMA32` patch | ✅ Applied | Compiled into Armbian 6.18.9 kernel. Constrains IOMMU page tables to <4 GB. |
-| 21 | Driver GEM `__GFP_DMA` + `ALLOC_FROM_PAGES=0` | ✅ Applied | Forces `dma_alloc_attrs()` path with 32-bit DMA mask |
-| 22 | `dma_set_mask_and_coherent(32-bit)` | ✅ Applied | Set in `rknpu_probe()` from `rk356x_rknpu_config.dma_mask` |
-| 23 | Udev dma32 symlink `/dev/dma_heap/system → dma32` | ✅ Applied | Redirects RKNN library allocations to dma32 heap (<4 GB) |
-| 24 | dma32-heap DKMS module | ✅ Working | `/dev/dma_heap/dma32` — all allocations guaranteed below 4 GB |
-| 25 | Full 7.5 GB RAM visible | ✅ Working | No `mem=3584M` needed, no CMA needed |
+| # | Item | Status | Notes |
+|---|------|--------|-------|
+| 20 | Armbian release baseline | ✅ Current | `v26.2.1` (May 2026 release stream) or newer |
+| 21 | Armbian release version semantics | ✅ Clarified | `v26.2.1` is an Armbian release version, not a Linux kernel version |
+| 22 | Armbian-side update | ✅ Landed | `armbian/build#9403` |
+| 23 | Repo kernel target | ✅ Current | This repository targets Linux kernel `6.18+` |
+| 24 | Validated baseline | ✅ Tested | `6.18.9-current-rockchip64` |
+| 25 | ODROID-M1 8 GB runtime | ✅ Verified | Full ~7.5 GB RAM visible on the target board |
+| 26 | `dma32-heap` DKMS module | ✅ Working | Installed by `install.sh` |
+| 27 | `/dev/dma_heap/system → dma32` | ✅ Applied | Installed by `install.sh` |
 
 ---
 
@@ -58,9 +60,9 @@
 | # | Device | Status | Purpose |
 |---|--------|--------|---------|
 | 27 | `/dev/rknpu` | ✅ Present | Misc device — RKNN API job submission (direct alloc + DMA-BUF import) |
-| 28 | `/dev/dri/renderD129` | ✅ Present | DRM render node — GEM buffer allocation and sharing |
-| 29 | `/dev/dma_heap/system` | ✅ Symlink → `dma32` | RKNN runtime buffer allocation (below 4 GB via dma32_heap) |
-| 30 | `/dev/dma_heap/dma32` | ✅ Present | Primary DMA heap — all allocations below 4 GB |
+| 28 | `/dev/dri/renderD129` | ✅ Present | DRM render node |
+| 29 | `/dev/dma_heap/system` | ✅ Symlink → `dma32` | RKNN runtime buffer allocation |
+| 30 | `/dev/dma_heap/dma32` | ✅ Present | DMA heap used by the installed runtime setup |
 
 ---
 
@@ -73,7 +75,7 @@
 | 34 | Runtime PM (power get/put) | ✅ Working | Auto suspend/resume per ioctl. Configurable delay via procfs/debugfs. |
 | 35 | Power-off delay | ✅ Working | Default ~500 ms. Tunable via `/proc/rknpu/delayms` or debugfs. |
 | 36 | Soft reset on error | ✅ Working | Always enabled. IOMMU detach/reattach on reset. |
-| 37 | Job submission (RKNPU_SUBMIT) | ✅ Working | Real inference via librknnrt + DRM/misc paths |
+| 37 | Job submission (RKNPU_SUBMIT) | ✅ Working | Real inference via librknnrt and the misc device path |
 | 38 | DMA-BUF import | ✅ Working | Cross-driver buffer sharing |
 | 39 | IOVA allocation | ✅ Working | `alloc_iova_fast()` for IOMMU mappings |
 | 40 | GEM contiguous allocation | ✅ Forced | `dkms_force_contig_alloc=Y` (default). Ignores `RKNPU_MEM_NON_CONTIGUOUS`. |
@@ -126,7 +128,6 @@
 | 61 | RKNN library hardcodes `system` heap | Requires udev symlink workaround | Udev rule installed by `install.sh` |
 | 62 | `regulator-always-on` on vdd_npu | Modest extra power draw when NPU idle | None — required to prevent PD6 crash |
 | 63 | PD6 disabled in stock Armbian DTB | NPU won't work without overlay | `rknpu` overlay enables PD6 at boot |
-| 64 | IOMMU GFP_DMA32 patch in kernel | Not in stock Armbian; custom kernel needed for 8 GB | Use Armbian 6.18.9 build that includes this patch |
 | 65 | SCMI freq accuracy | SCMI gives approximate values at low end (198/297/396 vs 200/300/400 MHz) | Cosmetic only |
 | 67 | SCMI 1100+ MHz crashes | SCMI gap: 1100 maps to 594 MHz, 1188 MHz crashes board | Capped at 1000 MHz |
 
@@ -138,7 +139,7 @@
 user_overlays=rknpu
 ```
 
-`fdtfile=rockchip/rk3568-odroid-m1-npu.dtb` + `user_overlays=rknpu`. No `extraargs`, no `mem=3584M`. Full 7.5 GB RAM visible. No CMA reservation.
+`fdtfile=rockchip/rk3568-odroid-m1-npu.dtb` + `user_overlays=rknpu`. No `extraargs`. Full ~7.5 GB RAM visible on the target board.
 
 ---
 

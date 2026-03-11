@@ -7,9 +7,11 @@ DKMS kernel modules to enable the 0.8 TOPS RKNN NPU on the ODROID-M1 (RK3568) ru
 | Component | Description |
 |-----------|-------------|
 | `drivers/rknpu/` | RKNPU kernel driver (DKMS) — DRM/GEM, devfreq, IOMMU, fence, debugfs, procfs |
-| `dma32-heap/` | DMA32 heap module — allocates DMA buffers below 4 GB for 8 GB boards |
-| `overlays/rknpu.dts` | Device tree overlay — enables NPU power domain, regulator, IOMMU wiring |
+| `dma32-heap/` | DMA32 heap module installed by `install.sh` |
+| `dtb/` | Custom device tree blob with NPU, IOMMU, and OPP table nodes |
+| `overlays/rknpu.dts` | Device tree overlay — enables NPU power domain, regulator, clocks, thermal |
 | `install.sh` | One-shot installer |
+| `uninstall.sh` | Uninstalls the DKMS modules and installed boot/runtime configuration |
 
 ## Requirements
 
@@ -27,58 +29,68 @@ apt install dkms build-essential device-tree-compiler linux-headers-current-rock
 git clone https://github.com/vitalijborissow/rk3568-npu-ODROID-M1.git
 cd rk3568-npu-ODROID-M1
 sudo ./install.sh
+sudo reboot
 ```
 
-Then edit `/boot/armbianEnv.txt`:
+The installer configures everything including `/boot/armbianEnv.txt` (backup saved as `.pre-npu`).
 
-```ini
-fdtfile=rockchip/rk3568-odroid-m1-npu.dtb
-user_overlays=rknpu
+## Uninstall
+
+```bash
+sudo ./uninstall.sh
+sudo reboot
 ```
 
-Reboot.
+The uninstaller removes the installed DKMS modules, DTB/overlay artifacts, udev rules, autoload files, and restores the relevant `/boot/armbianEnv.txt` settings.
 
 ## Verify
 
 ```bash
 lsmod | grep rknpu           # rknpu module loaded
 ls /dev/rknpu                # misc device
-ls /dev/dri/renderD129       # DRM render node
 ls -la /dev/dma_heap/system  # symlink -> dma32
 dmesg | grep RKNPU           # probe ok, no errors
 ```
 
-## 8 GB RAM Support
+## Armbian Support
 
-On 8 GB boards the NPU can only DMA to addresses below 4 GB. This is handled automatically:
+- Supported Armbian release baseline: **v26.2.1** (**May 2026 release stream**) or newer.
+- `v26.2.1` is an Armbian release version, not a Linux kernel version.
+- Required Armbian-side update: `armbian/build#9403`.
+- Repository kernel compatibility target: **Linux `6.18+`**.
+- Validated baseline: `6.18.9-current-rockchip64`.
 
-- **Kernel IOMMU:** Requires the `GFP_DMA32` patch in `rockchip-iommu.c` (included in Armbian 6.18.9+)
-- **Driver GEM:** Forces `dma_alloc_attrs` path with 32-bit DMA mask
-- **Userspace heap:** Udev rule redirects `/dev/dma_heap/system` → `linux,cma` (3 GB CMA below 4 GB)
+## Device Tree
 
-## Device Tree Overlay
+The stock Armbian DTB does not include NPU hardware nodes. Two pieces are needed:
 
-The `rknpu` overlay enables:
+**Custom DTB** (`dtb/rk3568-odroid-m1-npu.dtb`) adds the base hardware nodes:
+- NPU node (`npu@fde40000`) — compatible, reg, interrupts, clocks, resets
+- IOMMU node (`iommu@fde4b000`) — NPU memory management unit
+- OPP table (`npu-opp-table`) — DVFS frequency/voltage pairs (200–1000 MHz)
 
+**Overlay** (`overlays/rknpu.dts`) enables power and wiring on top of the DTB:
 - **PD6** (NPU power domain) — `status = "okay"`
 - **vdd_npu regulator** — `regulator-always-on`, `regulator-boot-on`
 - **Power domain wiring** — NPU and IOMMU linked to PD6
-- **NPU supply** — `rknpu-supply = <&vdd_npu>`
+- **SCMI + CRU clocks** — full clock tree for DVFS up to 1000 MHz
+- **Thermal throttling** — NPU bound to CPU and GPU thermal zones
+- **SRAM** — 44 KB shared SRAM for NPU acceleration
 
-Without this overlay the NPU power domain stays off and the driver crashes on MMIO access.
+Both are installed automatically by `install.sh`. Without them the NPU power domain stays off and the driver crashes on MMIO access.
 
 ## Features
 
 | Feature | Status |
 |---------|--------|
-| DRM/GEM buffer allocation | ✅ |
+| DRM render node `/dev/dri/renderD129` | ✅ Present |
 | IOMMU (translated mode) | ✅ |
 | Devfreq (DVFS, simple_ondemand) | ✅ |
 | Thermal throttling | ✅ |
 | `/dev/rknpu` misc device | ✅ |
 | Debugfs / Procfs | ✅ |
 | Fence sync | ✅ |
-| 8 GB RAM (full, no mem= limit) | ✅ |
+| ODROID-M1 8 GB runtime | ✅ |
 | SCMI clock (200–1000 MHz) | ✅ |
 | SRAM acceleration (44 KB) | ✅ |
 

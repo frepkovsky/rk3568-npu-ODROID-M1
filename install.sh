@@ -31,7 +31,21 @@ if ! command -v dtc &>/dev/null; then
     exit 1
 fi
 
-echo "[1/6] Installing rknpu DKMS module..."
+echo "[1/8] Installing NPU device tree blob..."
+DTB_SRC="$SCRIPT_DIR/dtb/rk3568-odroid-m1-npu.dtb"
+DTB_DIR="/boot/dtb/rockchip"
+if [ ! -f "$DTB_SRC" ]; then
+    echo "ERROR: DTB not found at $DTB_SRC"
+    exit 1
+fi
+if [ ! -d "$DTB_DIR" ]; then
+    echo "ERROR: DTB directory $DTB_DIR does not exist"
+    exit 1
+fi
+cp "$DTB_SRC" "$DTB_DIR/rk3568-odroid-m1-npu.dtb"
+echo "  rk3568-odroid-m1-npu.dtb installed to $DTB_DIR/"
+
+echo "[2/8] Installing rknpu DKMS module..."
 dkms remove -m rknpu -v 1.0 --all 2>/dev/null || true
 rm -rf /usr/src/rknpu-1.0
 mkdir -p /usr/src/rknpu-1.0
@@ -42,7 +56,7 @@ dkms build -m rknpu -v 1.0
 dkms install -m rknpu -v 1.0
 echo "  rknpu DKMS installed."
 
-echo "[2/6] Installing dma32-heap DKMS module..."
+echo "[3/8] Installing dma32-heap DKMS module..."
 dkms remove -m dma32-heap -v 1.0 --all 2>/dev/null || true
 rm -rf /usr/src/dma32-heap-1.0
 mkdir -p /usr/src/dma32-heap-1.0
@@ -54,7 +68,7 @@ dkms build -m dma32-heap -v 1.0
 dkms install -m dma32-heap -v 1.0
 echo "  dma32-heap DKMS installed."
 
-echo "[3/6] Compiling and installing DT overlay..."
+echo "[4/8] Compiling and installing DT overlay..."
 mkdir -p /boot/overlay-user
 
 # Read RKNPU_SRAM_PERCENT from Makefile (default 100)
@@ -136,7 +150,7 @@ dtc -@ -I dts -O dtb -o /boot/overlay-user/rknpu.dtbo "$TMP_DTS" 2>/dev/null
 rm -f "$TMP_DTS"
 echo "  rknpu.dtbo installed to /boot/overlay-user/"
 
-echo "[4/6] Configuring module autoload..."
+echo "[5/8] Configuring module autoload..."
 echo "rknpu" > /etc/modules-load.d/rknpu.conf
 echo "dma32_heap" > /etc/modules-load.d/dma32-heap.conf
 # Load all devfreq governors so performance/powersave/userspace are available
@@ -147,24 +161,44 @@ governor_userspace
 EOF
 echo "  Module autoload configured (rknpu + dma32_heap + devfreq governors)."
 
-echo "[5/6] Installing udev rules..."
-rm -f /etc/udev/rules.d/99-dma-heap-cma.rules
+echo "[6/8] Installing udev rules..."
 cat > /etc/udev/rules.d/99-dma-heap-dma32.rules << 'EOF'
 ACTION=="add", SUBSYSTEM=="dma_heap", KERNEL=="dma32", RUN+="/bin/sh -c 'rm -f /dev/dma_heap/system && ln -s /dev/dma_heap/dma32 /dev/dma_heap/system'"
 EOF
 echo "  Udev rules installed (DMA heap → dma32)."
 
-echo "[6/6] Removing any stale blacklists..."
+echo "[7/8] Removing any stale blacklists..."
 rm -f /etc/modprobe.d/blacklist-rknpu.conf
 rm -f /etc/modprobe.d/blacklist-npu.conf
 echo "  Done."
 
+echo "[8/8] Configuring /boot/armbianEnv.txt..."
+ENVFILE="/boot/armbianEnv.txt"
+[ -f "$ENVFILE" ] || { echo "ERROR: $ENVFILE not found"; exit 1; }
+
+# One-time backup
+[ -f "${ENVFILE}.pre-npu" ] || cp "$ENVFILE" "${ENVFILE}.pre-npu"
+
+# fdtfile
+if grep -q "^fdtfile=" "$ENVFILE"; then
+    sed -i 's|^fdtfile=.*|fdtfile=rockchip/rk3568-odroid-m1-npu.dtb|' "$ENVFILE"
+else
+    echo "fdtfile=rockchip/rk3568-odroid-m1-npu.dtb" >> "$ENVFILE"
+fi
+
+# user_overlays: add rknpu if not already present
+if grep -q "^user_overlays=" "$ENVFILE"; then
+    if ! grep "^user_overlays=" "$ENVFILE" | grep -q "rknpu"; then
+        sed -i 's|^user_overlays=\(.*\)|user_overlays=\1 rknpu|' "$ENVFILE"
+    fi
+else
+    echo "user_overlays=rknpu" >> "$ENVFILE"
+fi
+
+echo "  armbianEnv.txt configured (backup: ${ENVFILE}.pre-npu)"
+
 echo ""
-echo "=== Installation complete ==="
+echo "=== Installation complete. Reboot to activate NPU. ==="
 echo ""
-echo "Next steps:"
-echo "  1. Edit /boot/armbianEnv.txt and set:"
-echo "     fdtfile=rockchip/rk3568-odroid-m1-npu.dtb"
-echo "     user_overlays=rknpu"
-echo "  2. Reboot"
-echo "  3. Verify: lsmod | grep rknpu && ls /dev/rknpu /dev/dri/renderD129"
+echo "After reboot, verify:"
+echo "  lsmod | grep rknpu && ls /dev/rknpu /dev/dri/renderD129"

@@ -103,7 +103,7 @@ This driver uses SCMI exclusively for all frequencies (200–1000 MHz). The earl
 
 | Feature | Notes |
 |---------|-------|
-| DRM/GEM buffers | `/dev/dri/renderD129` |
+| DRM render node | `/dev/dri/renderD129` present; dedicated GEM userspace path still needs separate validation |
 | Misc device | `/dev/rknpu` — direct alloc + DMA-BUF import |
 | IOMMU | rk3568-iommu v2, translated mode |
 | Devfreq (DVFS) | Governors: simple_ondemand (default), performance, powersave, userspace |
@@ -112,14 +112,15 @@ This driver uses SCMI exclusively for all frequencies (200–1000 MHz). The earl
 | Procfs | `/proc/rknpu/` — 8 entries |
 | Fence sync | DRM syncobj / sync_file |
 | SRAM | 44 KB, configurable 0–100% split with rkvdec via `RKNPU_SRAM_PERCENT` |
-| 8 GB RAM | Full 7.5 GB accessible, no `mem=` kernel argument required |
+| ODROID-M1 8 GB runtime | Full ~7.5 GB accessible on the target board |
 
-### 8 GB RAM Support
+### Armbian Support
 
-The RK3568 NPU can only DMA to addresses below 4 GB. This is handled in two layers:
-
-1. [Kernel IOMMU `GFP_DMA32` patch](https://github.com/armbian/build/pull/9403) — constrains IOMMU page table allocations to <4 GB (included in Armbian 6.18.9)
-2. Driver `dma_set_mask(32-bit)` + udev symlink `/dev/dma_heap/system → dma32`
+- Supported Armbian release baseline: `v26.2.1` (May 2026 release stream) or newer.
+- `v26.2.1` is an Armbian release version, not a Linux kernel version.
+- Required Armbian-side update: `armbian/build#9403`.
+- Repository kernel compatibility target: Linux `6.18+`.
+- Validated baseline: `6.18.9-current-rockchip64`.
 
 ### Inference Performance
 
@@ -132,7 +133,7 @@ The RK3568 NPU can only DMA to addresses below 4 GB. This is handled in two laye
 | YOLO11n | 600 MHz | ~4.1 ms | ~241 |
 | YOLO11n | 1000 MHz | ~3.1 ms | ~321 |
 
-C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead. The DRM path (`/dev/dri/renderD129`) and misc path (`/dev/rknpu`) perform identically.
+C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead.
 
 ---
 
@@ -144,8 +145,7 @@ C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead. The 
 | `regulator-always-on` on vdd_npu | Required — disabling it causes a PD6 power domain crash |
 | SCMI low-end frequency accuracy | Reports 198/297/396 MHz instead of 200/300/400 — cosmetic only |
 | SCMI above 1000 MHz | 1100 MHz silently maps to 594 MHz; 1188 MHz crashes the board |
-| NPU DMA buffers constrained to <4 GB physical | By design — the NPU hardware has a 32-bit DMA bus. Buffers are allocated from `dma32_heap`. The full 8 GB is accessible to the CPU; only NPU-owned DMA buffers are below 4 GB. |
-| IOMMU translated mode not enabled | Would allow NPU DMA buffers to reside anywhere in physical RAM, but enabling it triggers a `rk_iommu_is_stall_active` external abort in `rockchip-iommu.c` on Armbian 6.18+. Fix requires a change in the kernel IOMMU driver, not this module. |
+| DRM render node userspace path | `/dev/dri/renderD129` is present, but dedicated GEM userspace create/map validation is still pending. |
 
 ---
 
@@ -161,4 +161,4 @@ C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead. The 
 - Replace the linear list scan in `rknpu_dkms_find_gem_obj_by_addr` with a hash table
 
 ### Validation
-- End-to-end test on a fresh Armbian 6.18.9 install
+- End-to-end test on a fresh Armbian May 2026 release-stream image

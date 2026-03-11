@@ -18,28 +18,92 @@
 		};
 	};
 
-	/* Force vdd_npu regulator always-on */
+	/* Force vdd_npu regulator always-on (defines vdd_npu label for overlay) */
 	fragment@2 {
 		target-path = "/i2c@fdd40000/pmic@20/regulators/DCDC_REG4";
-		__overlay__ {
+		vdd_npu: __overlay__ {
 			regulator-always-on;
 			regulator-boot-on;
 		};
 	};
 
-	/* Add power-domains, supply, SCMI+CRU clocks, and SRAM to NPU node */
+	/* Create (or merge into) NPU, IOMMU, and OPP table nodes at root.
+	 * On kernels where the stock DTB omits these nodes (e.g. mainline 6.18+),
+	 * they are created. On BSP-derived kernels where they already exist,
+	 * properties are merged harmlessly. */
 	fragment@3 {
-		target-path = "/npu@fde40000";
-		npu: __overlay__ {
-			#cooling-cells = <2>;
-			power-domains = <&power 0x06>;
-			rknpu-supply = <&vdd_npu>;
-			clocks = <&scmi_clk 0x02>,
-				 <&cru 0x23>,
-				 <&cru 0x28>,
-				 <&cru 0x29>;
-			clock-names = "scmi_clk", "clk", "aclk", "hclk";
-			rockchip,sram = <&npu_sram>; /* SRAM_PHANDLE */
+		target-path = "/";
+		__overlay__ {
+			npu_opp_table: npu-opp-table {
+				compatible = "operating-points-v2";
+
+				opp-200000000 {
+					opp-hz = /bits/ 64 <200000000>;
+					opp-microvolt = <825000 825000 1200000>;
+				};
+				opp-300000000 {
+					opp-hz = /bits/ 64 <300000000>;
+					opp-microvolt = <825000 825000 1200000>;
+				};
+				opp-400000000 {
+					opp-hz = /bits/ 64 <400000000>;
+					opp-microvolt = <825000 825000 1200000>;
+				};
+				opp-600000000 {
+					opp-hz = /bits/ 64 <600000000>;
+					opp-microvolt = <825000 825000 1200000>;
+				};
+				opp-700000000 {
+					opp-hz = /bits/ 64 <700000000>;
+					opp-microvolt = <900000 900000 1200000>;
+				};
+				opp-800000000 {
+					opp-hz = /bits/ 64 <800000000>;
+					opp-microvolt = <950000 950000 1200000>;
+				};
+				opp-900000000 {
+					opp-hz = /bits/ 64 <900000000>;
+					opp-microvolt = <1000000 1000000 1200000>;
+				};
+				opp-1000000000 {
+					opp-hz = /bits/ 64 <1000000000>;
+					opp-microvolt = <1050000 1050000 1200000>;
+				};
+			};
+
+			rknpu_mmu: iommu@fde4b000 {
+				compatible = "rockchip,iommu-v2";
+				reg = <0x0 0xfde4b000 0x0 0x40>;
+				interrupts = <0x0 0x97 0x4>;
+				interrupt-names = "rknpu_mmu";
+				clocks = <&cru 0x28>, <&cru 0x29>;
+				clock-names = "aclk", "iface";
+				power-domains = <&power 0x06>;
+				#iommu-cells = <0>;
+				status = "okay";
+			};
+
+			npu: npu@fde40000 {
+				compatible = "rockchip,rk3568-rknpu", "rockchip,rknpu";
+				reg = <0x0 0xfde40000 0x0 0x10000>;
+				interrupts = <0x0 0x97 0x4>;
+				clocks = <&scmi_clk 0x02>,
+					 <&cru 0x23>,
+					 <&cru 0x28>,
+					 <&cru 0x29>;
+				clock-names = "scmi_clk", "clk", "aclk", "hclk";
+				assigned-clocks = <&cru 0x23>;
+				assigned-clock-rates = <600000000>;
+				resets = <&cru 0x2b>, <&cru 0x2c>;
+				reset-names = "srst_a", "srst_h";
+				power-domains = <&power 0x06>;
+				rknpu-supply = <&vdd_npu>;
+				operating-points-v2 = <&npu_opp_table>;
+				iommus = <&rknpu_mmu>;
+				#cooling-cells = <2>;
+				rockchip,sram = <&npu_sram>; /* SRAM_PHANDLE */
+				status = "okay";
+			};
 		};
 	};
 
@@ -56,25 +120,6 @@
 		};
 	};
 	/* SRAM_SPLIT_END */
-
-	/* Add power-domains to IOMMU node */
-	fragment@4 {
-		target-path = "/iommu@fde4b000";
-		__overlay__ {
-			power-domains = <&power 0x06>;
-		};
-	};
-
-	/* Add 1 GHz OPP entry (SCMI supports up to 1000 MHz stable) */
-	fragment@7 {
-		target-path = "/npu-opp-table";
-		__overlay__ {
-			opp-1000000000 {
-				opp-hz = /bits/ 64 <1000000000>;
-				opp-microvolt = <1050000 1050000 1200000>;
-			};
-		};
-	};
 
 	/* Bind NPU cooling to both thermal zones at 75°C trips.
 	 * RK3568 has 2 TSADC channels: ch0=CPU, ch1=GPU. No NPU sensor.
