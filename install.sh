@@ -127,6 +127,10 @@ EOF
 			#address-cells = <1>;
 			#size-cells = <1>;
 
+			rkvdec-sram@0 {
+				status = "disabled";
+			};
+
 			npu_sram: npu-sram@0 {
 				reg = <0x0 0xb000>;
 			};
