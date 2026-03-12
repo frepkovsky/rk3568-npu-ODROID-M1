@@ -7,6 +7,10 @@ NUM_RUNS="${2:-30}"
 NPU_GOVERNOR="${RKNPU_BENCH_NPU_GOVERNOR:-performance}"
 CPU_GOVERNOR="${RKNPU_BENCH_CPU_GOVERNOR:-performance}"
 NPU_DEVFREQ="/sys/class/devfreq/fde40000.npu"
+IDLE_WAIT_SECONDS="${RKNPU_BENCH_IDLE_WAIT_SECONDS:-60}"
+IDLE_POLL_SECONDS="${RKNPU_BENCH_IDLE_POLL_SECONDS:-5}"
+LOADAVG1_MAX="${RKNPU_BENCH_LOADAVG1_MAX:-1.50}"
+TOP_LINES="${RKNPU_BENCH_TOP_LINES:-12}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: run as root"
@@ -36,6 +40,54 @@ restore_governors()
     done
 }
 
+show_top()
+{
+    top -bn1 | sed -n "1,${TOP_LINES}p"
+}
+
+show_busy_processes()
+{
+    pgrep -af '^zfs snapshot ' || true
+}
+
+board_is_idle()
+{
+    local loadavg1
+
+    loadavg1=$(awk '{print $1}' /proc/loadavg)
+    if ! awk -v current="$loadavg1" -v max="$LOADAVG1_MAX" 'BEGIN { exit !(current <= max) }'; then
+        return 1
+    fi
+
+    if pgrep -f '^zfs snapshot ' >/dev/null 2>&1; then
+        return 1
+    fi
+
+    return 0
+}
+
+wait_for_idle()
+{
+    local waited=0
+
+    while ! board_is_idle; do
+        if [ "$waited" -ge "$IDLE_WAIT_SECONDS" ]; then
+            echo "ERROR: board did not become idle within ${IDLE_WAIT_SECONDS}s"
+            echo "Load average: $(cut -d' ' -f1-3 /proc/loadavg)"
+            show_busy_processes
+            show_top
+            exit 1
+        fi
+
+        echo "== waiting for idle board state =="
+        echo "Load average: $(cut -d' ' -f1-3 /proc/loadavg)"
+        show_busy_processes
+        show_top
+        sleep "$IDLE_POLL_SECONDS"
+        waited=$((waited + IDLE_POLL_SECONDS))
+    done
+}
+
 show_state()
 {
     echo "NPU governor: $(cat "$NPU_DEVFREQ/governor")"
@@ -54,6 +106,9 @@ show_state()
         [ -d "$zone" ] || continue
         echo "$(basename "$zone") $(cat "$zone/type") $(cat "$zone/temp")"
     done
+    echo "Load average: $(cut -d' ' -f1-3 /proc/loadavg)"
+    show_busy_processes
+    show_top
 }
 
 trap restore_governors EXIT
@@ -63,6 +118,7 @@ for policy in "${CPU_POLICIES[@]}"; do
     echo "$CPU_GOVERNOR" > "$policy/scaling_governor"
 done
 sleep 1
+wait_for_idle
 
 echo "== pinned benchmark state before =="
 show_state
