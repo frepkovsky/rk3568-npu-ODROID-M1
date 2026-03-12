@@ -51,8 +51,31 @@ struct rknpu_dkms_gem_range {
 	unsigned long size;
 };
 
+static struct kmem_cache *rknpu_dkms_gem_range_cache;
 static LIST_HEAD(rknpu_dkms_gem_ranges);
 static DEFINE_SPINLOCK(rknpu_dkms_gem_ranges_lock);
+
+int rknpu_dkms_gem_range_cache_init(void)
+{
+	if (rknpu_dkms_gem_range_cache)
+		return 0;
+
+	rknpu_dkms_gem_range_cache =
+		kmem_cache_create("rknpu_dkms_gem_range",
+				  sizeof(struct rknpu_dkms_gem_range), 0,
+				  SLAB_HWCACHE_ALIGN, NULL);
+
+	return rknpu_dkms_gem_range_cache ? 0 : -ENOMEM;
+}
+
+void rknpu_dkms_gem_range_cache_destroy(void)
+{
+	if (!rknpu_dkms_gem_range_cache)
+		return;
+
+	kmem_cache_destroy(rknpu_dkms_gem_range_cache);
+	rknpu_dkms_gem_range_cache = NULL;
+}
 
 dma_addr_t rknpu_dkms_find_gem_base_by_addr(dma_addr_t addr)
 {
@@ -105,7 +128,7 @@ static void rknpu_dkms_track_gem_obj(struct rknpu_gem_object *obj)
 	if (!obj || !obj->dma_addr || !obj->size)
 		return;
 
-	r = kzalloc(sizeof(*r), GFP_KERNEL);
+	r = kmem_cache_zalloc(rknpu_dkms_gem_range_cache, GFP_KERNEL);
 	if (!r)
 		return;
 
@@ -122,7 +145,7 @@ static void rknpu_dkms_track_gem_obj(struct rknpu_gem_object *obj)
 				spin_unlock_irqrestore(&rknpu_dkms_gem_ranges_lock,
 						       flags);
 				rknpu_gem_object_put(&obj->base);
-				kfree(r);
+				kmem_cache_free(rknpu_dkms_gem_range_cache, r);
 				return;
 			}
 		}
@@ -141,7 +164,7 @@ static void rknpu_dkms_untrack_gem_obj(struct rknpu_gem_object *obj)
 		if (r->obj == obj) {
 			list_del(&r->list);
 			rknpu_gem_object_put(&obj->base);
-			kfree(r);
+			kmem_cache_free(rknpu_dkms_gem_range_cache, r);
 			break;
 		}
 	}
