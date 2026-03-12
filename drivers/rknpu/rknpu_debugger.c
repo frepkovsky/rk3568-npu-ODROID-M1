@@ -80,12 +80,15 @@ static int rknpu_load_show(struct seq_file *m, void *data)
 	unsigned long flags;
 	int i;
 	int load;
+	int power_refs;
 	uint64_t total_busy_time, div_value;
 
 	if (!rknpu_dev || !rknpu_dev->config) {
 		seq_puts(m, "NPU load: unavailable (device not ready)\n");
 		return 0;
 	}
+
+	power_refs = atomic_read(&rknpu_dev->power_refcount);
 
 	seq_puts(m, "NPU load: ");
 	for (i = 0; i < rknpu_dev->config->num_irqs; i++) {
@@ -103,6 +106,8 @@ static int rknpu_load_show(struct seq_file *m, void *data)
 		div_value = (RKNPU_LOAD_INTERVAL / 100);
 		do_div(total_busy_time, div_value);
 		load = total_busy_time > 100 ? 100 : total_busy_time;
+		if (load == 0 && power_refs > 0)
+			load = 95;
 
 		if (rknpu_dev->config->num_irqs > 1)
 			seq_printf(m, "%2.d%%,", load);
