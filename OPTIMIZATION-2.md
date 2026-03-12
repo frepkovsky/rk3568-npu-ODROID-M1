@@ -23,21 +23,14 @@ These optimizations are already in the accepted codebase and should be treated a
 
 ### 1. Remove old kernel compatibility branches
 
-- **Files:** multiple files under `drivers/rknpu/`
-- **Why it remains:** the repository targets Linux `6.18+` only, but many `KERNEL_VERSION(...)` branches still exist for older kernels
+- **Files:** notably `drivers/rknpu/include/rknpu_iommu.h`
+- **Why it remains:** the repository targets Linux `6.18+` only, but a small number of `KERNEL_VERSION(...)` guards still remain for older kernels
 - **Expected value:** high maintenance payoff
 - **Risk:** low if done mechanically and validated on the supported kernel only
 
-### 2. Remove `FPGA_PLATFORM` guards
+### 2. Flatten remaining `CONFIG_NO_GKI` branching
 
-- **Files:** `rknpu_drv.c`, `rknpu_reset.c`, `rknpu_debugger.c`
-- **Why it remains:** the project does not target FPGA platforms
-- **Expected value:** medium maintenance payoff
-- **Risk:** low
-
-### 3. Flatten remaining `CONFIG_NO_GKI` branching
-
-- **Files:** `rknpu_drv.c`, `rknpu_gem.c`, `rknpu_iommu.c`
+- **Files:** `rknpu_gem.c`, `rknpu_iommu.c`
 - **Why it remains:** DKMS on Armbian is the only supported target, so alternate branches add noise and hide the active path
 - **Expected value:** medium maintenance payoff
 - **Risk:** low to medium
@@ -84,6 +77,8 @@ These optimizations are already in the accepted codebase and should be treated a
 
 These are still useful ongoing checks even though the core runtime state is already established:
 
+- rebuild locally on the ODROID-M1 itself after `git pull`
+- keep smoke-test assets in persistent repo-local paths such as `project/rknn_model_zoo/src`, not `/tmp`
 - validate on a fresh supported Armbian image
 - keep using the idle-aware pinned benchmark wrapper for performance comparisons
 - keep validating both the misc path and the DRM render-node path after risky changes
@@ -104,7 +99,7 @@ These are intentionally not part of the active optimization backlog here:
 
 ## Suggested Order
 
-1. release-safe cleanup (`KERNEL_VERSION`, `FPGA_PLATFORM`, `CONFIG_NO_GKI`)
+1. release-safe cleanup (`KERNEL_VERSION`, `CONFIG_NO_GKI`)
 2. GEM address lookup improvement
 3. direct-allocation path simplification
 4. allocation pooling only if allocation-heavy workloads justify it
