@@ -12,6 +12,7 @@ DKMS kernel modules to enable the 0.8 TOPS RKNN NPU on the ODROID-M1 (RK3568) ru
 | `overlays/rknpu.dts` | Device tree overlay — enables NPU power domain, regulator, clocks, thermal |
 | `install.sh` | One-shot installer |
 | `uninstall.sh` | Uninstalls the DKMS modules and installed boot/runtime configuration |
+| `test.sh` | Fresh-checkout YOLO11n smoke test that builds and runs the upstream C++ demo on the M1 |
 
 ## Requirements
 
@@ -51,6 +52,23 @@ ls /dev/rknpu                # misc device
 ls -la /dev/dma_heap/system  # symlink -> dma32
 dmesg | grep RKNPU           # probe ok, no errors
 ```
+
+## Tests
+
+The repository currently ships a single end-to-end smoke test: `test.sh`.
+
+Run it directly on the ODROID-M1 after installing the driver. It creates or updates a fresh local checkout of `airockchip/rknn_model_zoo` under `/tmp/project/rknn_model_zoo/src`, builds the upstream Linux C++ `yolo11` demo, runs YOLO11n inference on one image, and saves the generated `out.png` to the output path you pass in.
+
+```bash
+./test.sh input.jpg
+./test.sh input.jpg output.png
+MODEL_ZOO_DIR=/tmp/project/rknn_model_zoo/src ./test.sh input.jpg output.png
+```
+
+- The test expects the NPU driver to be installed and `/dev/rknpu` to exist on the target board.
+- The inference path itself is C++ (`rknn_yolo11_demo`).
+- The script is intended to be run locally on the M1, not from a separate host.
+- A fresh upstream checkout does not currently ship `examples/yolo11/model/yolo11n_rk3568.rknn`. If that file is missing, `test.sh` performs a one-time upstream ONNX download plus RKNN conversion on the M1 before running the C++ demo.
 
 ## Armbian Support
 
