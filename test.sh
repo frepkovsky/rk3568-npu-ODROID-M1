@@ -1,10 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INPUT="${1:-}"
 OUTPUT="${2:-${INPUT%.*}-yolo11n-out.png}"
 REPO_URL="${REPO_URL:-https://github.com/airockchip/rknn_model_zoo.git}"
-MODEL_ZOO_DIR="${MODEL_ZOO_DIR:-/tmp/project/rknn_model_zoo/src}"
+MODEL_ZOO_DIR="${MODEL_ZOO_DIR:-$SCRIPT_DIR/project/rknn_model_zoo/src}"
 INSTALL_DIR_REL="install/rk356x_linux_aarch64/rknn_yolo11_demo"
 MODEL_REL="examples/yolo11/model/yolo11n_rk3568.rknn"
 
@@ -32,7 +33,6 @@ if [ "$(uname -m)" != "aarch64" ]; then
 fi
 
 require_cmd git
-require_cmd lsmod
 require_cmd python3
 require_cmd wget
 require_cmd cmake
@@ -44,7 +44,7 @@ if [ ! -e /dev/rknpu ]; then
     fail "/dev/rknpu not found; install the NPU driver first"
 fi
 
-if ! lsmod | grep -q '^rknpu\b'; then
+if ! grep -q '^rknpu\b' /proc/modules; then
     fail "rknpu module is not loaded; install and activate the NPU driver first"
 fi
 

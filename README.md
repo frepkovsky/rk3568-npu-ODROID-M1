@@ -113,11 +113,12 @@ Key expectations:
 ### End-to-End Smoke Test
 
 `test.sh` runs a local YOLO11n inference smoke test on the M1 using the upstream RKNN model zoo C++ demo.
+The default checkout path is the repo-local persistent directory `project/rknn_model_zoo/src`.
 
 ```bash
 ./test.sh input.jpg
 ./test.sh input.jpg output.png
-MODEL_ZOO_DIR=/tmp/project/rknn_model_zoo/src ./test.sh input.jpg output.png
+MODEL_ZOO_DIR="$PWD/project/rknn_model_zoo/src" ./test.sh input.jpg output.png
 ```
 
 ### Targeted Runtime Checks
