@@ -29,6 +29,29 @@
 #define REG_READ(offset) _REG_READ(rknpu_core_base, offset)
 #define REG_WRITE(value, offset) _REG_WRITE(rknpu_core_base, value, offset)
 
+static struct kmem_cache *rknpu_job_cache;
+
+int rknpu_job_cache_init(void)
+{
+	if (rknpu_job_cache)
+		return 0;
+
+	rknpu_job_cache = kmem_cache_create("rknpu_job",
+					   sizeof(struct rknpu_job), 0,
+					   SLAB_HWCACHE_ALIGN, NULL);
+
+	return rknpu_job_cache ? 0 : -ENOMEM;
+}
+
+void rknpu_job_cache_destroy(void)
+{
+	if (!rknpu_job_cache)
+		return;
+
+	kmem_cache_destroy(rknpu_job_cache);
+	rknpu_job_cache = NULL;
+}
+
 static int rknpu_wait_core_index(int core_mask)
 {
 	int index = 0;
@@ -114,7 +137,7 @@ static void rknpu_job_free(struct rknpu_job *job)
 	if (job->args_owner)
 		kfree(job->args);
 
-	kfree(job);
+	kmem_cache_free(rknpu_job_cache, job);
 }
 
 static int rknpu_job_cleanup(struct rknpu_job *job)
@@ -138,7 +161,7 @@ static inline struct rknpu_job *rknpu_job_alloc(struct rknpu_device *rknpu_dev,
 	struct rknpu_job *job = NULL;
 	int i = 0;
 
-	job = kzalloc(sizeof(*job), GFP_KERNEL);
+	job = kmem_cache_zalloc(rknpu_job_cache, GFP_KERNEL);
 	if (!job)
 		return NULL;
 
@@ -163,7 +186,7 @@ static inline struct rknpu_job *rknpu_job_alloc(struct rknpu_device *rknpu_dev,
 
 	job->args = kzalloc(sizeof(*args), GFP_KERNEL);
 	if (!job->args) {
-		kfree(job);
+		kmem_cache_free(rknpu_job_cache, job);
 		return NULL;
 	}
 	*job->args = *args;

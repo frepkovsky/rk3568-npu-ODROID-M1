@@ -1537,12 +1537,23 @@ static struct platform_driver rknpu_driver = {
 
 static int rknpu_init(void)
 {
-	return platform_driver_register(&rknpu_driver);
+	int ret;
+
+	ret = rknpu_job_cache_init();
+	if (ret)
+		return ret;
+
+	ret = platform_driver_register(&rknpu_driver);
+	if (ret)
+		rknpu_job_cache_destroy();
+
+	return ret;
 }
 
 static void rknpu_exit(void)
 {
 	platform_driver_unregister(&rknpu_driver);
+	rknpu_job_cache_destroy();
 }
 
 late_initcall(rknpu_init);

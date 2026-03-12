@@ -64,6 +64,9 @@ int rknpu_submit_ioctl(struct drm_device *dev, void *data,
 int rknpu_miscdev_submit_ioctl(struct rknpu_device *rknpu_dev, unsigned long data);
 #endif
 
+int rknpu_job_cache_init(void);
+void rknpu_job_cache_destroy(void);
+
 int rknpu_get_hw_version(struct rknpu_device *rknpu_dev, uint32_t *version);
 
 int rknpu_get_bw_priority(struct rknpu_device *rknpu_dev, uint32_t *priority,
