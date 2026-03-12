@@ -160,20 +160,6 @@ int rknpu_gem_prime_mmap(struct drm_gem_object *obj,
 int rknpu_gem_sync_ioctl(struct drm_device *dev, void *data,
 			 struct drm_file *file_priv);
 
-#ifdef RKNPU_DKMS
-int rknpu_dkms_gem_range_cache_init(void);
-void rknpu_dkms_gem_range_cache_destroy(void);
-#else
-static inline int rknpu_dkms_gem_range_cache_init(void)
-{
-	return 0;
-}
-
-static inline void rknpu_dkms_gem_range_cache_destroy(void)
-{
-}
-#endif
-
 static inline void *rknpu_gem_alloc_page(size_t nr_pages)
 {
 	return kvmalloc_array(nr_pages, sizeof(struct page *),

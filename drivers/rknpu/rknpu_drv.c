@@ -1543,17 +1543,9 @@ static int rknpu_init(void)
 	if (ret)
 		return ret;
 
-	ret = rknpu_dkms_gem_range_cache_init();
-	if (ret) {
-		rknpu_job_cache_destroy();
-		return ret;
-	}
-
 	ret = platform_driver_register(&rknpu_driver);
-	if (ret) {
-		rknpu_dkms_gem_range_cache_destroy();
+	if (ret)
 		rknpu_job_cache_destroy();
-	}
 
 	return ret;
 }
@@ -1561,7 +1553,6 @@ static int rknpu_init(void)
 static void rknpu_exit(void)
 {
 	platform_driver_unregister(&rknpu_driver);
-	rknpu_dkms_gem_range_cache_destroy();
 	rknpu_job_cache_destroy();
 }
 
