@@ -49,21 +49,17 @@ These optimizations are already in the accepted codebase and should be treated a
 - **Files:** `drivers/rknpu/rknpu_mem.c`, `drivers/rknpu/rknpu_drv.c`
 - **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.7 ms`, `11.8 FPS`)
 
-### 3. Add a buffer pool for repeated allocation-heavy workloads
+### 3. Add a buffer pool for repeated allocation-heavy workloads — Not adopted
 
+- **Status:** evaluated during this sweep and intentionally not implemented
 - **File:** `drivers/rknpu/rknpu_mem.c`
-- **Current state:** allocations are still created on demand
-- **Why it remains:** repeated model load and teardown paths may still benefit even if steady-state inference does not
-- **Expected value:** medium for repeated load/unload patterns
-- **Risk:** medium to high due to lifetime accounting and fragmentation policy
+- **Reason:** the current validated workload does not show allocation-heavy pressure that justifies added lifetime and fragmentation complexity after the direct-allocation fast path cleanup
 
-### 4. Simplify the load-accounting story
+### 4. Simplify the load-accounting story — Completed
 
-- **Files:** `rknpu_devfreq_dkms.c`, `rknpu_drv.c`, `rknpu_debugger.c`
-- **Current state:** devfreq now uses busy-time accounting plus active fallback, while debug reporting still exposes timer-based load separately
-- **Why it remains:** the runtime behavior is good, but the model is still more complex than ideal
-- **Expected value:** clarity first, minor runtime value second
-- **Risk:** low to medium
+- **Status:** completed in `53e10ad` (`drivers: align debugger load accounting`)
+- **Files:** `drivers/rknpu/rknpu_devfreq_dkms.c`, `drivers/rknpu/rknpu_debugger.c`
+- **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, `/proc/rknpu/load` remained sane at idle, and idle-aware pinned benchmark (`84.5 ms`, `11.8 FPS`)
 
 ---
 
