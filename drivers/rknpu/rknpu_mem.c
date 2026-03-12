@@ -207,12 +207,25 @@ static struct dma_buf *rknpu_dkms_alloc(struct device *dev, size_t size)
  *
  * Returns: pointer to rknpu_mem_object if found, NULL otherwise
  */
+static struct rknpu_mem_object *rknpu_session_find_mem_obj_by_addr(
+	struct rknpu_session *session, __u64 obj_addr)
+{
+	struct rknpu_mem_object *entry;
+
+	hash_for_each_possible(session->obj_addr_ht, entry, obj_addr_node,
+			       (unsigned long)obj_addr) {
+		if ((unsigned long)(uintptr_t)entry == (unsigned long)obj_addr)
+			return entry;
+	}
+
+	return NULL;
+}
+
 struct rknpu_mem_object *rknpu_mem_find_by_obj_addr(struct rknpu_device *rknpu_dev,
 						    struct file *file,
 						    __u64 obj_addr)
 {
 	struct rknpu_session *session;
-	struct rknpu_mem_object *entry;
 	struct rknpu_mem_object *found = NULL;
 
 	if (!file || !file->private_data)
@@ -220,12 +233,7 @@ struct rknpu_mem_object *rknpu_mem_find_by_obj_addr(struct rknpu_device *rknpu_d
 
 	spin_lock(&rknpu_dev->lock);
 	session = file->private_data;
-	list_for_each_entry(entry, &session->list, head) {
-		if ((unsigned long)(uintptr_t)entry == (unsigned long)obj_addr) {
-			found = entry;
-			break;
-		}
-	}
+	found = rknpu_session_find_mem_obj_by_addr(session, obj_addr);
 	spin_unlock(&rknpu_dev->lock);
 
 	return found;
@@ -370,6 +378,8 @@ int rknpu_mem_create_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 		ret = -EFAULT;
 		goto err_unmap_kv_addr;
 	}
+	hash_add(session->obj_addr_ht, &rknpu_obj->obj_addr_node,
+		 (unsigned long)(uintptr_t)rknpu_obj);
 	list_add_tail(&rknpu_obj->head, &session->list);
 
 	spin_unlock(&rknpu_dev->lock);
@@ -406,11 +416,10 @@ err_free_obj:
 int rknpu_mem_destroy_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 			    unsigned long data)
 {
-	struct rknpu_mem_object *rknpu_obj, *entry, *q;
+	struct rknpu_mem_object *rknpu_obj;
 	struct rknpu_session *session = NULL;
 	struct rknpu_mem_destroy args;
 	int ret = -EFAULT;
-	bool found = false;
 
 	if (unlikely(copy_from_user(&args, (struct rknpu_mem_destroy *)data,
 				    sizeof(struct rknpu_mem_destroy)))) {
@@ -437,17 +446,14 @@ int rknpu_mem_destroy_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 		ret = -EFAULT;
 		return ret;
 	}
-	list_for_each_entry_safe(entry, q, &session->list, head) {
-		if (entry == rknpu_obj) {
-			list_del(&entry->head);
-			found = true;
-			rknpu_obj = entry;
-			break;
-		}
+	rknpu_obj = rknpu_session_find_mem_obj_by_addr(session, args.obj_addr);
+	if (rknpu_obj) {
+		hash_del(&rknpu_obj->obj_addr_node);
+		list_del(&rknpu_obj->head);
 	}
 	spin_unlock(&rknpu_dev->lock);
 
-	if (!found) {
+	if (!rknpu_obj) {
 		ret = -EINVAL;
 		return ret;
 	}
@@ -546,12 +552,7 @@ int rknpu_mem_sync_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 		ret = -EFAULT;
 		return ret;
 	}
-	list_for_each_entry(entry, &session->list, head) {
-		if ((unsigned long)(uintptr_t)entry == (unsigned long)args.obj_addr) {
-			rknpu_obj = entry;
-			break;
-		}
-	}
+	rknpu_obj = rknpu_session_find_mem_obj_by_addr(session, args.obj_addr);
 	spin_unlock(&rknpu_dev->lock);
 
 	if (!rknpu_obj) {

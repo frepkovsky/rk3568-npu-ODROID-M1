@@ -11,6 +11,7 @@
 #include <linux/device.h>
 #include <linux/kref.h>
 #include <linux/irq.h>
+#include <linux/hashtable.h>
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
 #include <linux/regulator/consumer.h>
@@ -177,6 +178,7 @@ struct rknpu_device {
 struct rknpu_session {
 	struct rknpu_device *rknpu_dev;
 	struct list_head list;
+	DECLARE_HASHTABLE(obj_addr_ht, 6);
 };
 
 int rknpu_power_get(struct rknpu_device *rknpu_dev);

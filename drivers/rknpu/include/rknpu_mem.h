@@ -7,6 +7,7 @@
 #ifndef __LINUX_RKNPU_MEM_H
 #define __LINUX_RKNPU_MEM_H
 
+#include <linux/hashtable.h>
 #include <linux/mm_types.h>
 #include <linux/version.h>
 
@@ -35,6 +36,7 @@ struct rknpu_mem_object {
 	struct dma_buf *dmabuf;
 	struct dma_buf_attachment *attachment;
 	struct list_head head;
+	struct hlist_node obj_addr_node;
 	unsigned int owner;
 };
 
