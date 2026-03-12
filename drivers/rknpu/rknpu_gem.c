@@ -1694,13 +1694,11 @@ int rknpu_gem_sync_ioctl(struct drm_device *dev, void *data,
 		length = args->size;
 		offset = args->offset;
 
-		if (IS_ENABLED(CONFIG_NO_GKI) &&
-		    IS_ENABLED(CONFIG_ROCKCHIP_RKNPU_SRAM) &&
+		if (IS_ENABLED(CONFIG_ROCKCHIP_RKNPU_SRAM) &&
 		    rknpu_obj->sram_size > 0) {
 			rknpu_cache_sync(rknpu_obj, &length, &offset,
 					 RKNPU_CACHE_SRAM, args->flags);
-		} else if (IS_ENABLED(CONFIG_NO_GKI) &&
-			   rknpu_obj->nbuf_size > 0) {
+		} else if (rknpu_obj->nbuf_size > 0) {
 			rknpu_cache_sync(rknpu_obj, &length, &offset,
 					 RKNPU_CACHE_NBUF, args->flags);
 		}
