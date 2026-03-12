@@ -43,13 +43,11 @@ These optimizations are already in the accepted codebase and should be treated a
 - **File:** `drivers/rknpu/rknpu_gem.c`
 - **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.6 ms`, `11.8 FPS`)
 
-### 2. Short-circuit the self-owned DMA-BUF attach/map round trip
+### 2. Short-circuit the self-owned DMA-BUF attach/map round trip — Completed
 
-- **File:** `drivers/rknpu/rknpu_mem.c`
-- **Current state:** direct allocation is implemented and working, but still goes through the generic attachment and mapping path
-- **Why it remains:** self-owned buffers still pay framework overhead
-- **Expected value:** medium on allocation-heavy workflows
-- **Risk:** medium because DMA-BUF export semantics must remain correct
+- **Status:** completed in `1095592` (`drivers: short-circuit self-owned dma-buf setup`)
+- **Files:** `drivers/rknpu/rknpu_mem.c`, `drivers/rknpu/rknpu_drv.c`
+- **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.7 ms`, `11.8 FPS`)
 
 ### 3. Add a buffer pool for repeated allocation-heavy workloads
 
