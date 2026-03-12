@@ -1517,7 +1517,9 @@ static int rknpu_cache_sync_with_sg(struct rknpu_device *rknpu_dev,
 	struct scatterlist *s = NULL;
 	int i = 0;
 	int index = 0;
-	void __iomem *cache_start = 0;
+	struct device *sync_dev = rknpu_dev->fake_dev ?
+			rknpu_dev->fake_dev : rknpu_obj->base.dev->dev;
+	phys_addr_t cache_start = 0;
 	unsigned long cache_length = 0;
 
 	switch (rknpu_obj->core_mask) {
@@ -1532,25 +1534,25 @@ static int rknpu_cache_sync_with_sg(struct rknpu_device *rknpu_dev,
 	}
 
 	for_each_sgtable_sg(rknpu_dev->cache_sgt[index], s, i) {
-		cache_start = rknpu_dev->nbuf_base_io + s->offset;
+		cache_start = rknpu_dev->nbuf_start + s->offset;
 		cache_length = (*offset + *length) <= s->length ?
 				       *length :
 				       s->length - *offset;
 		if (dir & RKNPU_MEM_SYNC_TO_DEVICE) {
-			dcache_clean_poc((unsigned long)cache_start,
-					 (unsigned long)cache_start +
-						 cache_length);
+			dma_sync_single_range_for_device(sync_dev, cache_start,
+						 *offset, cache_length,
+						 DMA_TO_DEVICE);
 		}
 
 		if (dir & RKNPU_MEM_SYNC_FROM_DEVICE) {
-			dcache_inval_poc((unsigned long)cache_start,
-					 (unsigned long)cache_start +
-						 cache_length);
+			dma_sync_single_range_for_cpu(sync_dev, cache_start,
+					     *offset, cache_length,
+					     DMA_FROM_DEVICE);
 		}
 
 		*length = (*offset + *length) <= s->length ?
-				  0 :
-				  *length - cache_length;
+			  0 :
+			  *length - cache_length;
 		*offset = 0;
 
 		if (*length == 0)
@@ -1566,21 +1568,23 @@ static int rknpu_cache_sync(struct rknpu_gem_object *rknpu_obj,
 {
 	struct drm_gem_object *obj = &rknpu_obj->base;
 	struct rknpu_device *rknpu_dev = obj->dev->dev_private;
-	void __iomem *cache_base_io = NULL;
+	struct device *sync_dev = rknpu_dev->fake_dev ?
+			rknpu_dev->fake_dev : obj->dev->dev;
+	phys_addr_t cache_base = 0;
 	unsigned long cache_offset = 0;
 	unsigned long cache_size = 0;
-	void __iomem *cache_start = 0;
+	phys_addr_t cache_start = 0;
 	unsigned long cache_length = 0;
 
 	switch (cache_type) {
 	case RKNPU_CACHE_SRAM:
-		cache_base_io = rknpu_dev->sram_base_io;
+		cache_base = rknpu_dev->sram_start;
 		cache_offset = rknpu_obj->sram_obj->range_start *
 			       rknpu_dev->sram_mm->chunk_size;
 		cache_size = rknpu_obj->sram_size;
 		break;
 	case RKNPU_CACHE_NBUF:
-		cache_base_io = rknpu_dev->nbuf_base_io;
+		cache_base = rknpu_dev->nbuf_start;
 		cache_offset = 0;
 		cache_size = rknpu_obj->nbuf_size;
 		break;
@@ -1595,25 +1599,25 @@ static int rknpu_cache_sync(struct rknpu_gem_object *rknpu_obj,
 	}
 
 	if (!rknpu_obj->cache_with_sgt) {
-		cache_start = cache_base_io + cache_offset;
+		cache_start = cache_base + cache_offset;
 		cache_length = (*offset + *length) <= cache_size ?
 				       *length :
 				       cache_size - *offset;
 		if (dir & RKNPU_MEM_SYNC_TO_DEVICE) {
-			dcache_clean_poc((unsigned long)cache_start,
-					 (unsigned long)cache_start +
-						 cache_length);
+			dma_sync_single_range_for_device(sync_dev, cache_start,
+						 *offset, cache_length,
+						 DMA_TO_DEVICE);
 		}
 
 		if (dir & RKNPU_MEM_SYNC_FROM_DEVICE) {
-			dcache_inval_poc((unsigned long)cache_start,
-					 (unsigned long)cache_start +
-						 cache_length);
+			dma_sync_single_range_for_cpu(sync_dev, cache_start,
+					     *offset, cache_length,
+					     DMA_FROM_DEVICE);
 		}
 
 		*length = (*offset + *length) <= cache_size ?
-				  0 :
-				  *length - cache_length;
+			  0 :
+			  *length - cache_length;
 		*offset = 0;
 	} else {
 		rknpu_cache_sync_with_sg(rknpu_dev, rknpu_obj, length, offset,
