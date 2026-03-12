@@ -37,13 +37,11 @@ These optimizations are already in the accepted codebase and should be treated a
 
 ## Remaining Performance Work
 
-### 1. Replace linear GEM address lookup with a hash table
+### 1. Replace linear GEM address lookup with a hash table — Completed
 
+- **Status:** completed in `e48323e` (`drivers: hash dkms gem address lookups`)
 - **File:** `drivers/rknpu/rknpu_gem.c`
-- **Current state:** GEM range objects now use a slab cache, but lookup still linearly scans `rknpu_dkms_gem_ranges`
-- **Why it remains:** the lookup is still O(n)
-- **Expected value:** medium
-- **Risk:** medium because lookup and teardown correctness must stay exact
+- **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.6 ms`, `11.8 FPS`)
 
 ### 2. Short-circuit the self-owned DMA-BUF attach/map round trip
 
