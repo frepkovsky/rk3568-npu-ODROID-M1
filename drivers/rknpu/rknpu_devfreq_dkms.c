@@ -100,9 +100,24 @@ static int rknpu_devfreq_get_dev_status(struct device *dev,
 					struct devfreq_dev_status *stat)
 {
 	struct rknpu_device *rknpu_dev = dev_get_drvdata(dev);
+	unsigned long flags;
+	u64 busy_time = 0;
 	int power_refs;
+	int i;
 
 	stat->current_frequency = rknpu_dev->current_freq;
+	stat->total_time = RKNPU_LOAD_INTERVAL * rknpu_dev->config->num_irqs;
+
+	spin_lock_irqsave(&rknpu_dev->irq_lock, flags);
+	for (i = 0; i < rknpu_dev->config->num_irqs; i++)
+		busy_time +=
+			ktime_to_ns(rknpu_dev->subcore_datas[i].timer.total_busy_time);
+	spin_unlock_irqrestore(&rknpu_dev->irq_lock, flags);
+
+	if (busy_time > stat->total_time)
+		busy_time = stat->total_time;
+
+	stat->busy_time = busy_time;
 
 	/* Use power reference count as load indicator
 	 * When NPU is powered on (power_refcount > 0), it's processing jobs.
@@ -111,14 +126,11 @@ static int rknpu_devfreq_get_dev_status(struct device *dev,
 	 */
 	power_refs = atomic_read(&rknpu_dev->power_refcount);
 
-	if (power_refs > 0) {
+	if (stat->busy_time == 0 && power_refs > 0) {
 		/* NPU is active - report high load to scale up */
-		stat->total_time = 100;
-		stat->busy_time = 95;  /* 95% load - will trigger scale-up */
+		stat->busy_time = (stat->total_time * 95) / 100;
 	} else {
-		/* NPU is idle - report low load to scale down */
-		stat->total_time = 100;
-		stat->busy_time = 0;
+		stat->busy_time = busy_time;
 	}
 
 	return 0;
