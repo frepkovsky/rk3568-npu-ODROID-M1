@@ -490,6 +490,16 @@ static void __maybe_unused rknpu_dma_buf_sync(
 	unsigned int len = 0;
 	int i;
 
+	if (sgt->nents == 1) {
+		if (for_cpu)
+			dma_sync_single_range_for_cpu(dev, sg_dma_addr, offset,
+						      length, dir);
+		else
+			dma_sync_single_range_for_device(dev, sg_dma_addr, offset,
+							 length, dir);
+		return;
+	}
+
 	for_each_sgtable_sg(sgt, sg, i) {
 		unsigned int sg_offset, sg_left, size = 0;
 
