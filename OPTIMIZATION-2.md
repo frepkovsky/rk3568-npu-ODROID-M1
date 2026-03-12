@@ -21,12 +21,11 @@ These optimizations are already in the accepted codebase and should be treated a
 
 ## Remaining Cleanup Work
 
-### 1. Remove old kernel compatibility branches
+### 1. Remove old kernel compatibility branches — Completed
 
-- **Files:** notably `drivers/rknpu/include/rknpu_iommu.h`
-- **Why it remains:** the repository targets Linux `6.18+` only, but a small number of `KERNEL_VERSION(...)` guards still remain for older kernels
-- **Expected value:** high maintenance payoff
-- **Risk:** low if done mechanically and validated on the supported kernel only
+- **Status:** completed in `1d45258` (`drivers: drop remaining KERNEL_VERSION guards`)
+- **Files:** `drivers/rknpu/include/rknpu_iommu.h`
+- **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.6 ms`, `11.8 FPS`)
 
 ### 2. Flatten remaining `CONFIG_NO_GKI` branching
 
