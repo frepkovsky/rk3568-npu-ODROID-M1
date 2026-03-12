@@ -40,11 +40,7 @@
 #define RKNPU_LOAD_INTERVAL 1000000000
 
 #define LOG_INFO(fmt, args...) pr_info(LOG_TAG ": " fmt, ##args)
-#if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
 #define LOG_WARN(fmt, args...) pr_warn(LOG_TAG ": " fmt, ##args)
-#else
-#define LOG_WARN(fmt, args...) pr_warning(LOG_TAG ": " fmt, ##args)
-#endif
 #define LOG_DEBUG(fmt, args...) pr_devel(LOG_TAG ": " fmt, ##args)
 #define LOG_ERROR(fmt, args...) pr_err(LOG_TAG ": " fmt, ##args)
 
