@@ -27,12 +27,11 @@ These optimizations are already in the accepted codebase and should be treated a
 - **Files:** `drivers/rknpu/include/rknpu_iommu.h`
 - **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.6 ms`, `11.8 FPS`)
 
-### 2. Flatten remaining `CONFIG_NO_GKI` branching
+### 2. Flatten remaining `CONFIG_NO_GKI` branching — Completed
 
-- **Files:** `rknpu_gem.c`, `rknpu_iommu.c`
-- **Why it remains:** DKMS on Armbian is the only supported target, so alternate branches add noise and hide the active path
-- **Expected value:** medium maintenance payoff
-- **Risk:** low to medium
+- **Status:** completed in `1d2b705` (`drivers: flatten remaining CONFIG_NO_GKI paths`) plus `8d317dc` (`drivers: make gem cache sync dkms-safe`)
+- **Files:** `drivers/rknpu/rknpu_gem.c`, `drivers/rknpu/rknpu_iommu.c`
+- **Validation:** rebuilt locally on `m1`, rebooted, passed runtime markers, `tests/test_direct_alloc.c`, `tests/test_drm_gem.c`, and idle-aware pinned benchmark (`84.6 ms`, `11.8 FPS`)
 
 ---
 
