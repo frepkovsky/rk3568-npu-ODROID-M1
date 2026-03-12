@@ -551,7 +551,6 @@ static int rknpu_open(struct inode *inode, struct file *file)
 
 	session->rknpu_dev = rknpu_dev;
 	INIT_LIST_HEAD(&session->list);
-	hash_init(session->obj_addr_ht);
 
 	file->private_data = (void *)session;
 
@@ -592,7 +591,6 @@ static int rknpu_release(struct inode *inode, struct file *file)
 		if (!entry->owner)
 			dma_buf_put(entry->dmabuf);
 
-		hash_del(&entry->obj_addr_node);
 		list_del(&entry->head);
 		kfree(entry);
 	}
