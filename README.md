@@ -8,7 +8,7 @@ DKMS kernel modules to enable the 0.8 TOPS RKNN NPU on the ODROID-M1 (RK3568) ru
 |-----------|-------------|
 | `drivers/rknpu/` | RKNPU kernel driver (DKMS) — DRM/GEM, devfreq, IOMMU, fence, debugfs, procfs |
 | `dma32-heap/` | DMA32 heap module installed by `install.sh` |
-| `dtb/` | Custom device tree blob with NPU, IOMMU, and OPP table nodes |
+| `dtb/` | Custom device tree source for the board DTB with NPU, IOMMU, and OPP table nodes |
 | `overlays/rknpu.dts` | Device tree overlay — enables NPU power domain, regulator, clocks, thermal |
 | `install.sh` | One-shot installer |
 | `uninstall.sh` | Uninstalls the DKMS modules and installed boot/runtime configuration |
@@ -82,7 +82,7 @@ MODEL_ZOO_DIR=/tmp/project/rknn_model_zoo/src ./test.sh input.jpg output.png
 
 The stock Armbian DTB does not include NPU hardware nodes. Two pieces are needed:
 
-**Custom DTB** (`dtb/rk3568-odroid-m1-npu.dtb`) adds the base hardware nodes:
+**Custom DTB source** (`dtb/rk3568-odroid-m1-npu.dts`) adds the base hardware nodes:
 - NPU node (`npu@fde40000`) — compatible, reg, interrupts, clocks, resets
 - IOMMU node (`iommu@fde4b000`) — NPU memory management unit
 - OPP table (`npu-opp-table`) — DVFS frequency/voltage pairs (200–1000 MHz)
@@ -95,7 +95,7 @@ The stock Armbian DTB does not include NPU hardware nodes. Two pieces are needed
 - **Thermal throttling** — NPU bound to CPU and GPU thermal zones
 - **SRAM** — 44 KB shared SRAM for NPU acceleration
 
-Both are installed automatically by `install.sh`. Without them the NPU power domain stays off and the driver crashes on MMIO access.
+`install.sh` compiles `dtb/rk3568-odroid-m1-npu.dts` into `/boot/dtb/rockchip/rk3568-odroid-m1-npu.dtb` and installs the overlay as `/boot/overlay-user/rknpu.dtbo`. Without them the NPU power domain stays off and the driver crashes on MMIO access.
 
 ## Features
 

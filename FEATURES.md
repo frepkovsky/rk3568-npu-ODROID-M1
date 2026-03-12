@@ -139,7 +139,7 @@
 user_overlays=rknpu
 ```
 
-`fdtfile=rockchip/rk3568-odroid-m1-npu.dtb` + `user_overlays=rknpu`. No `extraargs`. Full ~7.5 GB RAM visible on the target board.
+`fdtfile=rockchip/rk3568-odroid-m1-npu.dtb` + `user_overlays=rknpu`. `install.sh` compiles that DTB from the checked-in source file `dtb/rk3568-odroid-m1-npu.dts`. No `extraargs`. Full ~7.5 GB RAM visible on the target board.
 
 ---
 

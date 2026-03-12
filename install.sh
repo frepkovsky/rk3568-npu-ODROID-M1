@@ -31,19 +31,19 @@ if ! command -v dtc &>/dev/null; then
     exit 1
 fi
 
-echo "[1/8] Installing NPU device tree blob..."
-DTB_SRC="$SCRIPT_DIR/dtb/rk3568-odroid-m1-npu.dtb"
+echo "[1/8] Compiling and installing NPU device tree blob..."
+DTB_SRC="$SCRIPT_DIR/dtb/rk3568-odroid-m1-npu.dts"
 DTB_DIR="/boot/dtb/rockchip"
 if [ ! -f "$DTB_SRC" ]; then
-    echo "ERROR: DTB not found at $DTB_SRC"
+    echo "ERROR: DTB source not found at $DTB_SRC"
     exit 1
 fi
 if [ ! -d "$DTB_DIR" ]; then
     echo "ERROR: DTB directory $DTB_DIR does not exist"
     exit 1
 fi
-cp "$DTB_SRC" "$DTB_DIR/rk3568-odroid-m1-npu.dtb"
-echo "  rk3568-odroid-m1-npu.dtb installed to $DTB_DIR/"
+dtc -I dts -O dtb -o "$DTB_DIR/rk3568-odroid-m1-npu.dtb" "$DTB_SRC"
+echo "  rk3568-odroid-m1-npu.dtb compiled from source and installed to $DTB_DIR/"
 
 echo "[2/8] Installing rknpu DKMS module..."
 dkms remove -m rknpu -v 1.0 --all 2>/dev/null || true
