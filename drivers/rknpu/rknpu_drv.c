@@ -676,13 +676,6 @@ const struct file_operations rknpu_fops = {
 #endif
 
 #ifdef CONFIG_ROCKCHIP_RKNPU_DRM_GEM
-#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
-static const struct vm_operations_struct rknpu_gem_vm_ops = {
-	.fault = rknpu_gem_fault,
-	.open = drm_gem_vm_open,
-	.close = drm_gem_vm_close,
-};
-#endif
 
 static int rknpu_action_ioctl(struct drm_device *dev, void *data,
 			      struct drm_file *file_priv)
@@ -732,59 +725,16 @@ static const struct drm_ioctl_desc rknpu_ioctls[] = {
 			  DRM_RENDER_ALLOW),
 };
 
-#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
 DEFINE_DRM_GEM_FOPS(rknpu_drm_driver_fops);
-#else
-static const struct file_operations rknpu_drm_driver_fops = {
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.mmap = rknpu_gem_mmap,
-	.poll = drm_poll,
-	.read = drm_read,
-	.unlocked_ioctl = drm_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = drm_compat_ioctl,
-#endif
-	.release = drm_release,
-	.llseek = noop_llseek,
-};
-#endif
 
 static struct drm_driver rknpu_drm_driver = {
-#if KERNEL_VERSION(5, 4, 0) <= LINUX_VERSION_CODE
 	.driver_features = DRIVER_GEM | DRIVER_RENDER,
-#else
-	.driver_features = DRIVER_GEM | DRIVER_PRIME | DRIVER_RENDER,
-#endif
-#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
-	.gem_free_object_unlocked = rknpu_gem_free_object,
-	.gem_vm_ops = &rknpu_gem_vm_ops,
-	.dumb_destroy = drm_gem_dumb_destroy,
-	.gem_prime_export = drm_gem_prime_export,
-	.gem_prime_get_sg_table = rknpu_gem_prime_get_sg_table,
-	.gem_prime_vmap = rknpu_gem_prime_vmap,
-	.gem_prime_vunmap = rknpu_gem_prime_vunmap,
-#endif
 	.dumb_create = rknpu_gem_dumb_create,
-#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
-	.dumb_map_offset = rknpu_gem_dumb_map_offset,
-#else
 	.dumb_map_offset = drm_gem_dumb_map_offset,
-#endif
 	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
 	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-#if KERNEL_VERSION(4, 13, 0) <= LINUX_VERSION_CODE
 	.gem_prime_import = rknpu_gem_prime_import,
-#else
-	.gem_prime_import = drm_gem_prime_import,
-#endif
 	.gem_prime_import_sg_table = rknpu_gem_prime_import_sg_table,
-#if KERNEL_VERSION(6, 6, 0) <= LINUX_VERSION_CODE
-#elif KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
-	.gem_prime_mmap = drm_gem_prime_mmap,
-#else
-	.gem_prime_mmap = rknpu_gem_prime_mmap,
-#endif
 	.ioctls = rknpu_ioctls,
 	.num_ioctls = ARRAY_SIZE(rknpu_ioctls),
 	.fops = &rknpu_drm_driver_fops,
@@ -925,11 +875,7 @@ static int rknpu_drm_probe(struct rknpu_device *rknpu_dev)
 	return 0;
 
 err_free_drm:
-#if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
 	drm_dev_put(drm_dev);
-#else
-	drm_dev_unref(drm_dev);
-#endif
 
 	return ret;
 }
@@ -942,11 +888,7 @@ static void rknpu_drm_remove(struct rknpu_device *rknpu_dev)
 
 	drm_dev_unregister(drm_dev);
 
-#if KERNEL_VERSION(4, 15, 0) <= LINUX_VERSION_CODE
 	drm_dev_put(drm_dev);
-#else
-	drm_dev_unref(drm_dev);
-#endif
 }
 #endif
 
@@ -966,12 +908,8 @@ static int rknpu_power_on(struct rknpu_device *rknpu_dev)
 
 	if (rknpu_dev->multiple_domains) {
 		if (rknpu_dev->genpd_dev_npu0) {
-#if KERNEL_VERSION(5, 5, 0) < LINUX_VERSION_CODE
 			ret = pm_runtime_resume_and_get(
 				rknpu_dev->genpd_dev_npu0);
-#else
-			ret = pm_runtime_get_sync(rknpu_dev->genpd_dev_npu0);
-#endif
 			if (ret < 0) {
 				LOG_DEV_ERROR(
 					dev,
@@ -981,12 +919,8 @@ static int rknpu_power_on(struct rknpu_device *rknpu_dev)
 			}
 		}
 		if (rknpu_dev->genpd_dev_npu1) {
-#if KERNEL_VERSION(5, 5, 0) < LINUX_VERSION_CODE
 			ret = pm_runtime_resume_and_get(
 				rknpu_dev->genpd_dev_npu1);
-#else
-			ret = pm_runtime_get_sync(rknpu_dev->genpd_dev_npu1);
-#endif
 			if (ret < 0) {
 				LOG_DEV_ERROR(
 					dev,
@@ -996,12 +930,8 @@ static int rknpu_power_on(struct rknpu_device *rknpu_dev)
 			}
 		}
 		if (rknpu_dev->genpd_dev_npu2) {
-#if KERNEL_VERSION(5, 5, 0) < LINUX_VERSION_CODE
 			ret = pm_runtime_resume_and_get(
 				rknpu_dev->genpd_dev_npu2);
-#else
-			ret = pm_runtime_get_sync(rknpu_dev->genpd_dev_npu2);
-#endif
 			if (ret < 0) {
 				LOG_DEV_ERROR(
 					dev,
@@ -1077,72 +1007,27 @@ static int rknpu_register_irq(struct platform_device *pdev,
 {
 	const struct rknpu_config *config = rknpu_dev->config;
 	struct device *dev = &pdev->dev;
-#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
-	struct resource *res;
-#endif
 	int i, ret, irq;
 
-#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
-	res = platform_get_resource_byname(pdev, IORESOURCE_IRQ,
-					   config->irqs[0].name);
-	if (res) {
-		/* there are irq names in dts */
-		for (i = 0; i < config->num_irqs; i++) {
-			irq = platform_get_irq_byname(pdev,
-						      config->irqs[i].name);
-			if (irq < 0) {
-				LOG_DEV_ERROR(dev, "no npu %s in dts\n",
-					      config->irqs[i].name);
-				return irq;
-			}
-
-			ret = devm_request_irq(dev, irq,
-					       config->irqs[i].irq_hdl,
-					       IRQF_SHARED, dev_name(dev),
-					       rknpu_dev);
-			if (ret < 0) {
-				LOG_DEV_ERROR(dev, "request %s failed: %d\n",
-					      config->irqs[i].name, ret);
-				return ret;
-			}
-		}
-	} else {
-		/* no irq names in dts */
-		irq = platform_get_irq(pdev, 0);
-		if (irq < 0) {
-			LOG_DEV_ERROR(dev, "no npu irq in dts\n");
-			return irq;
-		}
-
-		ret = devm_request_irq(dev, irq, rknpu_core0_irq_handler,
-				       IRQF_SHARED, dev_name(dev), rknpu_dev);
-		if (ret < 0) {
-			LOG_DEV_ERROR(dev, "request irq failed: %d\n", ret);
-			return ret;
-		}
-	}
-#else
 	/* there are irq names in dts */
 	for (i = 0; i < config->num_irqs; i++) {
 		irq = platform_get_irq_byname(pdev, config->irqs[i].name);
 		if (irq < 0) {
-			irq = platform_get_irq(pdev, i);
-			if (irq < 0) {
-				LOG_DEV_ERROR(dev, "no npu %s in dts\n",
-					      config->irqs[i].name);
-				return irq;
-			}
+			LOG_DEV_ERROR(dev, "no npu %s in dts\n",
+				      config->irqs[i].name);
+			return irq;
 		}
 
-		ret = devm_request_irq(dev, irq, config->irqs[i].irq_hdl,
-				       IRQF_SHARED, dev_name(dev), rknpu_dev);
+		ret = devm_request_irq(dev, irq,
+				       config->irqs[i].irq_hdl,
+				       IRQF_SHARED, dev_name(dev),
+				       rknpu_dev);
 		if (ret < 0) {
 			LOG_DEV_ERROR(dev, "request %s failed: %d\n",
 				      config->irqs[i].name, ret);
 			return ret;
 		}
 	}
-#endif
 
 	return 0;
 }
@@ -1368,20 +1253,14 @@ static int rknpu_probe(struct platform_device *pdev)
 			return -ENXIO;
 		}
 
-		/*
-		 * RK3568 NPU region (0xfde40000-0xfde4ffff) overlaps with the
-		 * NPU IOMMU at 0xfde4b000. Skip devm_ioremap_resource() to
-		 * avoid kernel "can't request region" error and go straight
-		 * to devm_ioremap() which doesn't require exclusive access.
-		 */
 		if (res->start == 0xfde40000) {
 			rknpu_dev->base[i] = devm_ioremap(dev, res->start,
-							  resource_size(res));
+						  resource_size(res));
 		} else {
 			rknpu_dev->base[i] = devm_ioremap_resource(dev, res);
 			if (PTR_ERR(rknpu_dev->base[i]) == -EBUSY) {
 				rknpu_dev->base[i] = devm_ioremap(dev, res->start,
-								  resource_size(res));
+							  resource_size(res));
 			}
 		}
 
@@ -1675,6 +1554,4 @@ MODULE_ALIAS("rockchip-rknpu");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION(RKNPU_GET_DRV_VERSION_STRING(DRIVER_MAJOR, DRIVER_MINOR,
 					    DRIVER_PATCHLEVEL));
-#if KERNEL_VERSION(5, 16, 0) < LINUX_VERSION_CODE
 MODULE_IMPORT_NS("DMA_BUF");
-#endif

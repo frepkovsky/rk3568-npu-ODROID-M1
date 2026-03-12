@@ -18,9 +18,7 @@
 #include <linux/rk-dma-heap.h>
 #endif
 
-#if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 #include <linux/dma-map-ops.h>
-#endif
 
 #include "rknpu_drv.h"
 #include "rknpu_ioctl.h"
@@ -28,7 +26,6 @@
 
 #if defined(CONFIG_ROCKCHIP_RKNPU_DMA_HEAP) || defined(RKNPU_DKMS_MISCDEV)
 
-#if KERNEL_VERSION(6, 1, 115) < LINUX_VERSION_CODE
 #if defined(CONFIG_ARM64) && !defined(RKNPU_DKMS)
 /*
  * Check whether a kernel address is valid (derived from arch/x86/).
@@ -78,7 +75,6 @@ static int kern_addr_valid(unsigned long addr)
 }
 #else
 #define kern_addr_valid(addr)	(1)
-#endif
 #endif
 
 #ifdef RKNPU_DKMS_MISCDEV
