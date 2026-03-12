@@ -9,7 +9,6 @@
 
 #include "rknpu_reset.h"
 
-#ifndef FPGA_PLATFORM
 static inline struct reset_control *rknpu_reset_control_get(struct device *dev,
 							    const char *name)
 {
@@ -23,11 +22,9 @@ static inline struct reset_control *rknpu_reset_control_get(struct device *dev,
 
 	return rst;
 }
-#endif
 
 int rknpu_reset_get(struct rknpu_device *rknpu_dev)
 {
-#ifndef FPGA_PLATFORM
 	int i = 0;
 	int num_srsts = 0;
 
@@ -56,12 +53,8 @@ int rknpu_reset_get(struct rknpu_device *rknpu_dev)
 	rknpu_dev->num_srsts = num_srsts;
 
 	return num_srsts;
-#endif
-
-	return 0;
 }
 
-#ifndef FPGA_PLATFORM
 static int rknpu_reset_assert(struct reset_control *rst)
 {
 	int ret = -EINVAL;
@@ -93,11 +86,9 @@ static int rknpu_reset_deassert(struct reset_control *rst)
 
 	return 0;
 }
-#endif
 
 int rknpu_soft_reset(struct rknpu_device *rknpu_dev)
 {
-#ifndef FPGA_PLATFORM
 	struct iommu_domain *domain = NULL;
 	struct rknpu_subcore_data *subcore_data = NULL;
 	int ret = 0, i = 0;
@@ -149,7 +140,5 @@ int rknpu_soft_reset(struct rknpu_device *rknpu_dev)
 		rknpu_dev->config->state_init(rknpu_dev);
 
 	/* Skip mutex unlock - not using mutex */
-#endif
-
 	return 0;
 }

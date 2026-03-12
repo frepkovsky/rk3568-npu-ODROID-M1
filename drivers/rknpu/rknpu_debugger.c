@@ -13,11 +13,9 @@
 #include <linux/clk.h>
 #include <asm/div64.h>
 
-#ifndef FPGA_PLATFORM
 #ifdef CONFIG_PM_DEVFREQ
 #ifndef RKNPU_DKMS
 #include <../drivers/devfreq/governor.h>
-#endif
 #endif
 #endif
 

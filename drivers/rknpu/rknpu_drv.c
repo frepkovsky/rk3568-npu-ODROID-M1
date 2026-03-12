@@ -38,9 +38,7 @@
 #include <linux/regmap.h>
 #include <linux/of_address.h>
 
-#ifndef FPGA_PLATFORM
 #include <soc/rockchip/rockchip_iommu.h>
-#endif
 
 #include "rknpu_ioctl.h"
 #include "rknpu_reset.h"
@@ -444,17 +442,13 @@ static int rknpu_action(struct rknpu_device *rknpu_dev,
 		ret = rknpu_get_drv_version(&args->value);
 		break;
 	case RKNPU_GET_FREQ:
-#ifndef FPGA_PLATFORM
 		args->value = clk_get_rate(rknpu_dev->clks[0].clk);
-#endif
 		ret = 0;
 		break;
 	case RKNPU_SET_FREQ:
 		break;
 	case RKNPU_GET_VOLT:
-#ifndef FPGA_PLATFORM
 		args->value = regulator_get_voltage(rknpu_dev->vdd);
-#endif
 		ret = 0;
 		break;
 	case RKNPU_SET_VOLT:
@@ -968,9 +962,7 @@ static int rknpu_power_on(struct rknpu_device *rknpu_dev)
 		return ret;
 	}
 
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_lock(rknpu_dev);
-#endif
 
 	if (rknpu_dev->multiple_domains) {
 		if (rknpu_dev->genpd_dev_npu0) {
@@ -1030,9 +1022,7 @@ static int rknpu_power_on(struct rknpu_device *rknpu_dev)
 		rknpu_dev->config->state_init(rknpu_dev);
 
 out:
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_unlock(rknpu_dev);
-#endif
 
 	return ret;
 }
@@ -1041,17 +1031,14 @@ static int rknpu_power_off(struct rknpu_device *rknpu_dev)
 {
 	struct device *dev = rknpu_dev->dev;
 
-#ifndef FPGA_PLATFORM
 	int ret;
 	bool val;
 
 	rknpu_devfreq_lock(rknpu_dev);
-#endif
 
 	pm_runtime_put_sync(dev);
 
 	if (rknpu_dev->multiple_domains) {
-#ifndef FPGA_PLATFORM
 		/*
 		 * Because IOMMU's runtime suspend callback is asynchronous,
 		 * So it may be executed after the NPU is turned off after PD/CLK/VD,
@@ -1070,10 +1057,6 @@ static int rknpu_power_off(struct rknpu_device *rknpu_dev)
 			rknpu_devfreq_unlock(rknpu_dev);
 			return ret;
 		}
-#else
-		if (rknpu_dev->iommu_en)
-			msleep(20);
-#endif
 		if (rknpu_dev->genpd_dev_npu2)
 			pm_runtime_put_sync(rknpu_dev->genpd_dev_npu2);
 		if (rknpu_dev->genpd_dev_npu1)
@@ -1082,9 +1065,7 @@ static int rknpu_power_off(struct rknpu_device *rknpu_dev)
 			pm_runtime_put_sync(rknpu_dev->genpd_dev_npu0);
 	}
 
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_unlock(rknpu_dev);
-#endif
 
 	clk_bulk_disable_unprepare(rknpu_dev->num_clks, rknpu_dev->clks);
 
@@ -1341,12 +1322,9 @@ static int rknpu_probe(struct platform_device *pdev)
 	rknpu_dev->num_clks = devm_clk_bulk_get_all(dev, &rknpu_dev->clks);
 	if (rknpu_dev->num_clks < 1) {
 		LOG_DEV_ERROR(dev, "failed to get clk source for rknpu\n");
-#ifndef FPGA_PLATFORM
 		return -ENODEV;
-#endif
 	}
 
-#ifndef FPGA_PLATFORM
 	rknpu_dev->vdd = devm_regulator_get_optional(dev, "rknpu");
 	if (IS_ERR(rknpu_dev->vdd)) {
 		if (PTR_ERR(rknpu_dev->vdd) != -ENODEV) {
@@ -1372,7 +1350,6 @@ static int rknpu_probe(struct platform_device *pdev)
 		}
 		rknpu_dev->mem = NULL;
 	}
-#endif
 
 	spin_lock_init(&rknpu_dev->lock);
 	spin_lock_init(&rknpu_dev->irq_lock);
@@ -1512,9 +1489,7 @@ static int rknpu_probe(struct platform_device *pdev)
 	ret = rknpu_soft_reset(rknpu_dev);
 	if (ret)
 		LOG_DEV_WARN(dev, "RKNPU: hardware reset failed: %d (continuing)\n", ret);
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_init(rknpu_dev);
-#endif
 
 	rknpu_dev->power_put_delay = power_put_delay_ms;
 	rknpu_dev->power_off_wq =
@@ -1578,9 +1553,7 @@ err_remove_wq:
 	destroy_workqueue(rknpu_dev->power_off_wq);
 
 err_devfreq_remove:
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_remove(rknpu_dev);
-#endif
 
 err_remove_drv:
 #ifdef CONFIG_ROCKCHIP_RKNPU_DRM_GEM
@@ -1634,9 +1607,7 @@ static void rknpu_remove(struct platform_device *pdev)
 	misc_deregister(&(rknpu_dev->miscdev));
 #endif
 
-#ifndef FPGA_PLATFORM
 	rknpu_devfreq_remove(rknpu_dev);
-#endif
 
 	mutex_lock(&rknpu_dev->power_lock);
 	if (atomic_read(&rknpu_dev->power_refcount) > 0)
@@ -1654,11 +1625,8 @@ static void rknpu_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 
-	
 }
 
-#ifndef FPGA_PLATFORM
-#ifdef CONFIG_PM_SLEEP
 static int rknpu_suspend(struct device *dev)
 {
 	struct rknpu_device *rknpu_dev = dev_get_drvdata(dev);
@@ -1676,7 +1644,6 @@ static int rknpu_resume(struct device *dev)
 
 	return pm_runtime_force_resume(dev);
 }
-#endif
 
 static int rknpu_runtime_suspend(struct device *dev)
 {
@@ -1692,7 +1659,6 @@ static const struct dev_pm_ops rknpu_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(rknpu_suspend, rknpu_resume) SET_RUNTIME_PM_OPS(
 		rknpu_runtime_suspend, rknpu_runtime_resume, NULL)
 };
-#endif
 
 static struct platform_driver rknpu_driver = {
 	.probe = rknpu_probe,
@@ -1700,9 +1666,7 @@ static struct platform_driver rknpu_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "RKNPU",
-#ifndef FPGA_PLATFORM
 		.pm = &rknpu_pm_ops,
-#endif
 		.of_match_table = of_match_ptr(rknpu_of_match),
 	},
 };
