@@ -585,9 +585,14 @@ static int rknpu_release(struct inode *inode, struct file *file)
 			entry->kv_addr = NULL;
 		}
 
-		dma_buf_unmap_attachment(entry->attachment, entry->sgt,
+		if (entry->attachment) {
+			dma_buf_unmap_attachment(entry->attachment, entry->sgt,
 					 DMA_BIDIRECTIONAL);
-		dma_buf_detach(entry->dmabuf, entry->attachment);
+			dma_buf_detach(entry->dmabuf, entry->attachment);
+		} else {
+			sg_free_table(entry->sgt);
+			kfree(entry->sgt);
+		}
 
 		if (!entry->owner)
 			dma_buf_put(entry->dmabuf);

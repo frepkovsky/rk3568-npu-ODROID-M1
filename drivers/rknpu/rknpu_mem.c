@@ -91,10 +91,8 @@ struct rknpu_dkms_buf {
 	dma_addr_t dma_addr;
 };
 
-static struct sg_table *rknpu_dkms_buf_map(struct dma_buf_attachment *attach,
-					   enum dma_data_direction dir)
+static struct sg_table *rknpu_dkms_buf_make_sgt(struct rknpu_dkms_buf *buf)
 {
-	struct rknpu_dkms_buf *buf = attach->dmabuf->priv;
 	struct sg_table *sgt;
 	int ret;
 
@@ -114,6 +112,14 @@ static struct sg_table *rknpu_dkms_buf_map(struct dma_buf_attachment *attach,
 	sgt->nents = 1;
 
 	return sgt;
+}
+
+static struct sg_table *rknpu_dkms_buf_map(struct dma_buf_attachment *attach,
+					   enum dma_data_direction dir)
+{
+	struct rknpu_dkms_buf *buf = attach->dmabuf->priv;
+
+	return rknpu_dkms_buf_make_sgt(buf);
 }
 
 static void rknpu_dkms_buf_unmap(struct dma_buf_attachment *attach,
@@ -195,6 +201,15 @@ static struct dma_buf *rknpu_dkms_alloc(struct device *dev, size_t size)
 	return dmabuf;
 }
 
+static void rknpu_mem_free_sgt(struct sg_table *sgt)
+{
+	if (!sgt)
+		return;
+
+	sg_free_table(sgt);
+	kfree(sgt);
+}
+
 /**
  * rknpu_mem_find_by_obj_addr - Validate and find mem_object by its kernel address
  * @rknpu_dev: RKNPU device
@@ -245,8 +260,8 @@ int rknpu_mem_create_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 {
 	struct rknpu_mem_create args;
 	int ret = -EINVAL;
-	struct dma_buf_attachment *attachment;
-	struct sg_table *table;
+	struct dma_buf_attachment *attachment = NULL;
+	struct sg_table *table = NULL;
 	struct dma_buf *dmabuf;
 	struct rknpu_mem_object *rknpu_obj = NULL;
 	struct rknpu_session *session = NULL;
@@ -301,6 +316,14 @@ int rknpu_mem_create_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 			ret = -EFAULT;
 			goto err_free_dma_buf;
 		}
+
+		table = rknpu_dkms_buf_make_sgt(dmabuf->priv);
+		if (IS_ERR(table)) {
+			ret = PTR_ERR(table);
+			goto err_free_dma_buf;
+		}
+
+		attachment = NULL;
 #else
 		dmabuf = rk_dma_heap_buffer_alloc(rknpu_dev->heap, args.size,
 					  O_CLOEXEC | O_RDWR, 0x0,
@@ -324,19 +347,21 @@ int rknpu_mem_create_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 #endif
 	}
 
-	attachment = dma_buf_attach(dmabuf, rknpu_dev->dev);
-	if (IS_ERR(attachment)) {
-		LOG_ERROR("dma_buf_attach failed\n");
-		ret = PTR_ERR(attachment);
-		goto err_free_dma_buf;
-	}
+	if (!table) {
+		attachment = dma_buf_attach(dmabuf, rknpu_dev->dev);
+		if (IS_ERR(attachment)) {
+			LOG_ERROR("dma_buf_attach failed\n");
+			ret = PTR_ERR(attachment);
+			goto err_free_dma_buf;
+		}
 
-	table = dma_buf_map_attachment(attachment, DMA_BIDIRECTIONAL);
-	if (IS_ERR(table)) {
-		LOG_ERROR("dma_buf_map_attachment failed\n");
-		dma_buf_detach(dmabuf, attachment);
-		ret = PTR_ERR(table);
-		goto err_free_dma_buf;
+		table = dma_buf_map_attachment(attachment, DMA_BIDIRECTIONAL);
+		if (IS_ERR(table)) {
+			LOG_ERROR("dma_buf_map_attachment failed\n");
+			dma_buf_detach(dmabuf, attachment);
+			ret = PTR_ERR(table);
+			goto err_free_dma_buf;
+		}
 	}
 
 	if (args.flags & RKNPU_MEM_KERNEL_MAPPING) {
@@ -391,8 +416,12 @@ err_unmap_kv_addr:
 	rknpu_obj->kv_addr = NULL;
 
 err_detach_dma_buf:
-	dma_buf_unmap_attachment(attachment, table, DMA_BIDIRECTIONAL);
-	dma_buf_detach(dmabuf, attachment);
+	if (attachment) {
+		dma_buf_unmap_attachment(attachment, table, DMA_BIDIRECTIONAL);
+		dma_buf_detach(dmabuf, attachment);
+	} else {
+		rknpu_mem_free_sgt(table);
+	}
 
 err_free_dma_buf:
 	if (rknpu_obj->owner) {
@@ -469,9 +498,13 @@ int rknpu_mem_destroy_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 		rknpu_obj->kv_addr = NULL;
 	}
 
-	dma_buf_unmap_attachment(rknpu_obj->attachment, rknpu_obj->sgt,
+	if (rknpu_obj->attachment) {
+		dma_buf_unmap_attachment(rknpu_obj->attachment, rknpu_obj->sgt,
 				 DMA_BIDIRECTIONAL);
-	dma_buf_detach(rknpu_obj->dmabuf, rknpu_obj->attachment);
+		dma_buf_detach(rknpu_obj->dmabuf, rknpu_obj->attachment);
+	} else {
+		rknpu_mem_free_sgt(rknpu_obj->sgt);
+	}
 
 	if (!rknpu_obj->owner)
 		dma_buf_put(rknpu_obj->dmabuf);
