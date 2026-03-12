@@ -11,11 +11,6 @@
 #include <linux/seq_file.h>
 #include <linux/iommu.h>
 #include <linux/iova.h>
-#include <linux/version.h>
-
-#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
-#include <linux/dma-iommu.h>
-#endif
 
 #include "rknpu_drv.h"
 
@@ -52,9 +47,5 @@ void rknpu_iommu_free_domains(struct rknpu_device *rknpu_dev);
 int rknpu_iommu_domain_get_and_switch(struct rknpu_device *rknpu_dev,
 				      int domain_id);
 int rknpu_iommu_domain_put(struct rknpu_device *rknpu_dev);
-
-#if KERNEL_VERSION(5, 10, 0) < LINUX_VERSION_CODE
-int iommu_get_dma_cookie(struct iommu_domain *domain);
-#endif
 
 #endif
