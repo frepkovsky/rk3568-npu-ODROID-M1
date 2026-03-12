@@ -1502,8 +1502,6 @@ static int rknpu_probe(struct platform_device *pdev)
 	INIT_DEFERRABLE_WORK(&rknpu_dev->power_off_work,
 			     rknpu_power_off_delay_work);
 
-	/* DKMS: Use RKNPU_DKMS_SRAM_ENABLED to bypass CONFIG_NO_GKI check */
-#if defined(RKNPU_DKMS_SRAM_ENABLED)
 	if (IS_ENABLED(CONFIG_ROCKCHIP_RKNPU_SRAM) && rknpu_dev->iommu_en) {
 		if (!rknpu_find_sram_resource(rknpu_dev)) {
 			ret = rknpu_mm_create(rknpu_dev->sram_size, PAGE_SIZE,
@@ -1514,21 +1512,8 @@ static int rknpu_probe(struct platform_device *pdev)
 			LOG_DEV_WARN(dev, "could not find sram resource!\n");
 		}
 	}
-#else
-	if (IS_ENABLED(CONFIG_NO_GKI) &&
-	    IS_ENABLED(CONFIG_ROCKCHIP_RKNPU_SRAM) && rknpu_dev->iommu_en) {
-		if (!rknpu_find_sram_resource(rknpu_dev)) {
-			ret = rknpu_mm_create(rknpu_dev->sram_size, PAGE_SIZE,
-					      &rknpu_dev->sram_mm);
-			if (ret != 0)
-				goto err_remove_wq;
-		} else {
-			LOG_DEV_WARN(dev, "could not find sram resource!\n");
-		}
-	}
-#endif
 
-	if (IS_ENABLED(CONFIG_NO_GKI) && rknpu_dev->iommu_en &&
+	if (rknpu_dev->iommu_en &&
 	    rknpu_dev->config->nbuf_size > 0) {
 		rknpu_find_nbuf_resource(rknpu_dev);
 		if (rknpu_dev->config->cache_sgt_init != NULL)

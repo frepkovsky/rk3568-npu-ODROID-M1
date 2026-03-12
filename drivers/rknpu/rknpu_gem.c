@@ -917,7 +917,7 @@ rknpu_gem_object_create(struct drm_device *drm, unsigned int flags,
 				goto mm_free;
 			remain_ddr_size = 0;
 		}
-	} else if (IS_ENABLED(CONFIG_NO_GKI) &&
+	} else if (
 		   (flags & RKNPU_MEM_TRY_ALLOC_NBUF) &&
 		   rknpu_dev->nbuf_size > 0) {
 		size_t nbuf_size = rknpu_dev->nbuf_size;
@@ -1020,8 +1020,7 @@ void rknpu_gem_object_destroy(struct rknpu_gem_object *rknpu_obj)
 					      rknpu_obj->sram_obj);
 			rknpu_gem_free_buf_with_cache(rknpu_obj,
 						      RKNPU_CACHE_SRAM);
-		} else if (IS_ENABLED(CONFIG_NO_GKI) &&
-			   rknpu_obj->nbuf_size > 0) {
+		} else if (rknpu_obj->nbuf_size > 0) {
 			rknpu_gem_free_buf_with_cache(rknpu_obj,
 						      RKNPU_CACHE_NBUF);
 		} else {
@@ -1887,13 +1886,13 @@ int rknpu_gem_sync_ioctl(struct drm_device *dev, void *data,
 		if (rknpu_obj->sgt) {
 			if (args->flags & RKNPU_MEM_SYNC_TO_DEVICE) {
 				dma_sync_sg_for_device(dev->dev, rknpu_obj->sgt->sgl,
-						    rknpu_obj->sgt->nents,
-						    DMA_TO_DEVICE);
+							rknpu_obj->sgt->nents,
+							DMA_TO_DEVICE);
 			}
 			if (args->flags & RKNPU_MEM_SYNC_FROM_DEVICE) {
 				dma_sync_sg_for_cpu(dev->dev, rknpu_obj->sgt->sgl,
-						 rknpu_obj->sgt->nents,
-						 DMA_FROM_DEVICE);
+							rknpu_obj->sgt->nents,
+							DMA_FROM_DEVICE);
 			}
 			LOG_DEBUG(
 				"DKMS: MEM_SYNC sg sync nents=%u flags=%#x\n",
