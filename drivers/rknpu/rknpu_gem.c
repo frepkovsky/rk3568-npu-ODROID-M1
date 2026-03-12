@@ -44,15 +44,26 @@ MODULE_PARM_DESC(
 #endif
 
 #ifdef RKNPU_DKMS
+#define RKNPU_DKMS_GEM_RANGE_HASH_BITS 10
+
+struct rknpu_dkms_gem_page_slot {
+	struct hlist_node node;
+	struct rknpu_dkms_gem_range *range;
+	unsigned long page_index;
+};
+
 struct rknpu_dkms_gem_range {
 	struct list_head list;
 	struct rknpu_gem_object *obj;
 	dma_addr_t base;
 	unsigned long size;
+	struct rknpu_dkms_gem_page_slot *page_slots;
+	unsigned int nr_page_slots;
 };
 
 static struct kmem_cache *rknpu_dkms_gem_range_cache;
 static LIST_HEAD(rknpu_dkms_gem_ranges);
+static DEFINE_HASHTABLE(rknpu_dkms_gem_ranges_ht, RKNPU_DKMS_GEM_RANGE_HASH_BITS);
 static DEFINE_SPINLOCK(rknpu_dkms_gem_ranges_lock);
 
 int rknpu_dkms_gem_range_cache_init(void)
@@ -64,6 +75,8 @@ int rknpu_dkms_gem_range_cache_init(void)
 		kmem_cache_create("rknpu_dkms_gem_range",
 				  sizeof(struct rknpu_dkms_gem_range), 0,
 				  SLAB_HWCACHE_ALIGN, NULL);
+	INIT_LIST_HEAD(&rknpu_dkms_gem_ranges);
+	hash_init(rknpu_dkms_gem_ranges_ht);
 
 	return rknpu_dkms_gem_range_cache ? 0 : -ENOMEM;
 }
@@ -75,6 +88,29 @@ void rknpu_dkms_gem_range_cache_destroy(void)
 
 	kmem_cache_destroy(rknpu_dkms_gem_range_cache);
 	rknpu_dkms_gem_range_cache = NULL;
+	INIT_LIST_HEAD(&rknpu_dkms_gem_ranges);
+	hash_init(rknpu_dkms_gem_ranges_ht);
+}
+
+static struct rknpu_dkms_gem_range *rknpu_dkms_find_gem_range_locked(
+	dma_addr_t addr)
+{
+	struct rknpu_dkms_gem_page_slot *slot;
+	struct rknpu_dkms_gem_range *r;
+	unsigned long page_index = (unsigned long)(addr >> PAGE_SHIFT);
+
+	hash_for_each_possible(rknpu_dkms_gem_ranges_ht, slot, node, page_index) {
+		r = slot->range;
+		if (addr >= r->base && addr < (r->base + r->size))
+			return r;
+	}
+
+	list_for_each_entry(r, &rknpu_dkms_gem_ranges, list) {
+		if (addr >= r->base && addr < (r->base + r->size))
+			return r;
+	}
+
+	return NULL;
 }
 
 dma_addr_t rknpu_dkms_find_gem_base_by_addr(dma_addr_t addr)
@@ -84,12 +120,9 @@ dma_addr_t rknpu_dkms_find_gem_base_by_addr(dma_addr_t addr)
 	unsigned long flags;
 
 	spin_lock_irqsave(&rknpu_dkms_gem_ranges_lock, flags);
-	list_for_each_entry(r, &rknpu_dkms_gem_ranges, list) {
-		if (addr >= r->base && addr < (r->base + r->size)) {
-			base = r->base;
-			break;
-		}
-	}
+	r = rknpu_dkms_find_gem_range_locked(addr);
+	if (r)
+		base = r->base;
 	spin_unlock_irqrestore(&rknpu_dkms_gem_ranges_lock, flags);
 
 	return base;
@@ -104,13 +137,11 @@ rknpu_dkms_find_gem_obj_by_addr(dma_addr_t addr, dma_addr_t *base_out)
 	unsigned long flags;
 
 	spin_lock_irqsave(&rknpu_dkms_gem_ranges_lock, flags);
-	list_for_each_entry(r, &rknpu_dkms_gem_ranges, list) {
-		if (addr >= r->base && addr < (r->base + r->size)) {
-			obj = r->obj;
-			base = r->base;
-			rknpu_gem_object_get(&obj->base);
-			break;
-		}
+	r = rknpu_dkms_find_gem_range_locked(addr);
+	if (r) {
+		obj = r->obj;
+		base = r->base;
+		rknpu_gem_object_get(&obj->base);
 	}
 	spin_unlock_irqrestore(&rknpu_dkms_gem_ranges_lock, flags);
 
@@ -123,18 +154,31 @@ rknpu_dkms_find_gem_obj_by_addr(dma_addr_t addr, dma_addr_t *base_out)
 static void rknpu_dkms_track_gem_obj(struct rknpu_gem_object *obj)
 {
 	struct rknpu_dkms_gem_range *r;
+	struct rknpu_dkms_gem_page_slot *page_slots = NULL;
+	unsigned long start_page, end_page;
+	unsigned int i, nr_page_slots = 0;
 	unsigned long flags;
 
 	if (!obj || !obj->dma_addr || !obj->size)
 		return;
 
+	start_page = (unsigned long)(obj->dma_addr >> PAGE_SHIFT);
+	end_page = (unsigned long)((obj->dma_addr + obj->size - 1) >> PAGE_SHIFT);
+	nr_page_slots = (unsigned int)(end_page - start_page + 1);
+	if (nr_page_slots > 0)
+		page_slots = kcalloc(nr_page_slots, sizeof(*page_slots), GFP_KERNEL);
+
 	r = kmem_cache_zalloc(rknpu_dkms_gem_range_cache, GFP_KERNEL);
-	if (!r)
+	if (!r) {
+		kfree(page_slots);
 		return;
+	}
 
 	r->obj = obj;
 	r->base = obj->dma_addr;
 	r->size = obj->size;
+	r->page_slots = page_slots;
+	r->nr_page_slots = page_slots ? nr_page_slots : 0;
 	rknpu_gem_object_get(&obj->base);
 
 	spin_lock_irqsave(&rknpu_dkms_gem_ranges_lock, flags);
@@ -145,10 +189,17 @@ static void rknpu_dkms_track_gem_obj(struct rknpu_gem_object *obj)
 				spin_unlock_irqrestore(&rknpu_dkms_gem_ranges_lock,
 						       flags);
 				rknpu_gem_object_put(&obj->base);
+				kfree(page_slots);
 				kmem_cache_free(rknpu_dkms_gem_range_cache, r);
 				return;
 			}
 		}
+	}
+	for (i = 0; i < r->nr_page_slots; i++) {
+		r->page_slots[i].range = r;
+		r->page_slots[i].page_index = start_page + i;
+		hash_add(rknpu_dkms_gem_ranges_ht, &r->page_slots[i].node,
+			 r->page_slots[i].page_index);
 	}
 	list_add_tail(&r->list, &rknpu_dkms_gem_ranges);
 	spin_unlock_irqrestore(&rknpu_dkms_gem_ranges_lock, flags);
@@ -157,13 +208,17 @@ static void rknpu_dkms_track_gem_obj(struct rknpu_gem_object *obj)
 static void rknpu_dkms_untrack_gem_obj(struct rknpu_gem_object *obj)
 {
 	struct rknpu_dkms_gem_range *r, *q;
+	unsigned int i;
 	unsigned long flags;
 
 	spin_lock_irqsave(&rknpu_dkms_gem_ranges_lock, flags);
 	list_for_each_entry_safe(r, q, &rknpu_dkms_gem_ranges, list) {
 		if (r->obj == obj) {
+			for (i = 0; i < r->nr_page_slots; i++)
+				hash_del(&r->page_slots[i].node);
 			list_del(&r->list);
 			rknpu_gem_object_put(&obj->base);
+			kfree(r->page_slots);
 			kmem_cache_free(rknpu_dkms_gem_range_cache, r);
 			break;
 		}
