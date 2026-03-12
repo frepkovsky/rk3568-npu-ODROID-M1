@@ -1,23 +1,34 @@
 # Rockchip RKNPU — DKMS Driver for ODROID-M1
 
-DKMS kernel modules to enable the 0.8 TOPS RKNN NPU on the ODROID-M1 (RK3568) running Armbian mainline kernels.
+DKMS kernel modules and boot configuration for enabling the RK3568 RKNN NPU on the ODROID-M1 under Armbian mainline kernels.
 
-## What's Included
+## Supported Platform
+
+- **Board:** ODROID-M1
+- **SoC:** Rockchip RK3568
+- **Armbian baseline:** `v26.2.1` or newer
+- **Kernel target:** Linux `6.18+`
+- **Validated baseline:** `6.18.9-current-rockchip64`
+- **RKNN SDK/runtime tested:** `2.4.0`
+- **NPU frequency range:** SCMI-managed `200–1000 MHz`
+
+## What the Repository Contains
 
 | Component | Description |
 |-----------|-------------|
-| `drivers/rknpu/` | RKNPU kernel driver (DKMS) — DRM/GEM, devfreq, IOMMU, fence, debugfs, procfs |
-| `dma32-heap/` | DMA32 heap module installed by `install.sh` |
-| `dtb/` | Custom device tree source for the board DTB with NPU, IOMMU, and OPP table nodes |
-| `overlays/rknpu.dts` | Device tree overlay — enables NPU power domain, regulator, clocks, thermal |
-| `install.sh` | One-shot installer |
-| `uninstall.sh` | Uninstalls the DKMS modules and installed boot/runtime configuration |
-| `test.sh` | Fresh-checkout YOLO11n smoke test that builds and runs the upstream C++ demo on the M1 |
+| `drivers/rknpu/` | RKNPU DKMS driver with DRM/GEM, misc device, devfreq, IOMMU, fence, debugfs, procfs, and SRAM support |
+| `dma32-heap/` | DMA heap DKMS module used by the installed runtime setup |
+| `dtb/` | Custom ODROID-M1 DTB source with NPU, IOMMU, and OPP nodes |
+| `overlays/rknpu.dts` | Overlay enabling power, clocks, regulator, thermal bindings, and SRAM wiring |
+| `install.sh` | Installer for DKMS modules, DTB, overlay, udev rules, and boot configuration |
+| `uninstall.sh` | Uninstaller that removes installed artifacts and restores boot configuration |
+| `test.sh` | End-to-end YOLO11n smoke test on the target board |
+| `tests/` | Direct-allocation, DRM GEM, thermal, and benchmark utilities |
 
 ## Requirements
 
-- ODROID-M1 (Rockchip RK3568) with Armbian
-- Kernel ≥ 6.18 with headers installed
+- ODROID-M1 running Armbian
+- Linux kernel headers for the running `rockchip64` kernel
 - Packages: `dkms`, `build-essential`, `device-tree-compiler`
 
 ```bash
@@ -33,7 +44,28 @@ sudo ./install.sh
 sudo reboot
 ```
 
-The installer configures everything including `/boot/armbianEnv.txt` (backup saved as `.pre-npu`).
+`install.sh` performs the full supported setup:
+
+- installs `rknpu` DKMS package version `1.0`
+- installs `dma32-heap` DKMS package version `1.0`
+- compiles and installs `dtb/rk3568-odroid-m1-npu.dts`
+- installs `/boot/overlay-user/rknpu.dtbo`
+- creates module autoload entries for `rknpu`, `dma32_heap`, and devfreq governors
+- installs the `/dev/dma_heap/system -> /dev/dma_heap/dma32` udev rule
+- updates `/boot/armbianEnv.txt` and saves a one-time backup as `/boot/armbianEnv.txt.pre-npu`
+
+## Boot Configuration
+
+The supported runtime uses both a custom DTB and the checked-in overlay.
+
+`install.sh` configures `/boot/armbianEnv.txt` with:
+
+```text
+fdtfile=rockchip/rk3568-odroid-m1-npu.dtb
+user_overlays=rknpu
+```
+
+This is required because the stock Armbian DTB does not provide the complete NPU, IOMMU, OPP, and power-domain wiring used by this repository.
 
 ## Uninstall
 
@@ -42,22 +74,45 @@ sudo ./uninstall.sh
 sudo reboot
 ```
 
-The uninstaller removes the installed DKMS modules, DTB/overlay artifacts, udev rules, autoload files, and restores the relevant `/boot/armbianEnv.txt` settings.
+The uninstaller removes the DKMS modules, DTB and overlay artifacts, autoload files, udev rules, and restores the relevant `/boot/armbianEnv.txt` settings from the saved backup when present.
 
 ## Verify
 
+After reboot, the expected runtime state is:
+
 ```bash
-lsmod | grep rknpu           # rknpu module loaded
-ls /dev/rknpu                # misc device
-ls -la /dev/dma_heap/system  # symlink -> dma32
-dmesg | grep RKNPU           # probe ok, no errors
+lsmod | grep -E '^(rknpu|dma32_heap)\b'
+ls -l /dev/rknpu /dev/dri/by-path/platform-fde40000.npu-render /dev/dma_heap/system /dev/dma_heap/dma32
+cat /sys/class/devfreq/fde40000.npu/governor
+dmesg | grep -i rknpu
 ```
 
-## Tests
+Key expectations:
 
-The repository currently ships a single end-to-end smoke test: `test.sh`.
+- `/dev/rknpu` exists
+- `/dev/dri/by-path/platform-fde40000.npu-render` exists and points to the active render node
+- `/dev/dma_heap/system` is a symlink to `/dev/dma_heap/dma32`
+- `/sys/class/devfreq/fde40000.npu` exists
 
-Run it directly on the ODROID-M1 after installing the driver. It creates or updates a fresh local checkout of `airockchip/rknn_model_zoo` under `/tmp/project/rknn_model_zoo/src`, builds the upstream Linux C++ `yolo11` demo, runs YOLO11n inference on one image, and saves the generated `out.png` to the output path you pass in.
+## Runtime Features
+
+| Feature | Status |
+|---------|--------|
+| Misc device `/dev/rknpu` | ✅ Working |
+| DRM render node | ✅ Working |
+| IOMMU translated mode | ✅ Working |
+| Devfreq / DVFS | ✅ Working |
+| Thermal throttling | ✅ Working |
+| Debugfs and procfs | ✅ Working |
+| Fence sync | ✅ Working |
+| SRAM support | ✅ Working |
+| DMA heap integration | ✅ Working |
+
+## Tests and Benchmarks
+
+### End-to-End Smoke Test
+
+`test.sh` runs a local YOLO11n inference smoke test on the M1 using the upstream RKNN model zoo C++ demo.
 
 ```bash
 ./test.sh input.jpg
@@ -65,60 +120,45 @@ Run it directly on the ODROID-M1 after installing the driver. It creates or upda
 MODEL_ZOO_DIR=/tmp/project/rknn_model_zoo/src ./test.sh input.jpg output.png
 ```
 
-- The test expects the NPU driver to be installed and `/dev/rknpu` to exist on the target board.
-- The inference path itself is C++ (`rknn_yolo11_demo`).
-- The script is intended to be run locally on the M1, not from a separate host.
-- A fresh upstream checkout does not currently ship `examples/yolo11/model/yolo11n_rk3568.rknn`. If that file is missing, `test.sh` performs a one-time upstream ONNX download plus RKNN conversion on the M1 before running the C++ demo.
+### Targeted Runtime Checks
 
-## Armbian Support
+- `tests/test_direct_alloc.c` verifies the misc-device direct-allocation and DMA-BUF import path
+- `tests/test_drm_gem.c` verifies DRM GEM create/map on the NPU render node
 
-- Supported Armbian release baseline: **v26.2.1** (**May 2026 release stream**) or newer.
-- `v26.2.1` is an Armbian release version, not a Linux kernel version.
-- Required Armbian-side update: `armbian/build#9403`.
-- Repository kernel compatibility target: **Linux `6.18+`**.
-- Validated baseline: `6.18.9-current-rockchip64`.
+### Benchmarks
 
-## Device Tree
+- `tests/bench_yolov5.py` measures RKNNLite YOLOv5 inference latency
+- `tests/bench_yolov5_pinned.sh` pins CPU and NPU governors and waits for an idle board state before measuring
 
-The stock Armbian DTB does not include NPU hardware nodes. Two pieces are needed:
+The current validated performance reference includes:
 
-**Custom DTB source** (`dtb/rk3568-odroid-m1-npu.dts`) adds the base hardware nodes:
-- NPU node (`npu@fde40000`) — compatible, reg, interrupts, clocks, resets
-- IOMMU node (`iommu@fde4b000`) — NPU memory management unit
-- OPP table (`npu-opp-table`) — DVFS frequency/voltage pairs (200–1000 MHz)
+- YOLOv5s 640×640 via C API: `42.4 ms` average at `1000 MHz`
+- YOLOv5s 640×640 via Python RKNNLite and idle-aware pinned benchmark: about `85–86 ms` average, about `11.7 FPS`
+- YOLO11n smoke test: working on the target board
 
-**Overlay** (`overlays/rknpu.dts`) enables power and wiring on top of the DTB:
-- **PD6** (NPU power domain) — `status = "okay"`
-- **vdd_npu regulator** — `regulator-always-on`, `regulator-boot-on`
-- **Power domain wiring** — NPU and IOMMU linked to PD6
-- **SCMI + CRU clocks** — full clock tree for DVFS up to 1000 MHz
-- **Thermal throttling** — NPU bound to CPU and GPU thermal zones
-- **SRAM** — 44 KB shared SRAM for NPU acceleration
+## Device Tree Layout
 
-`install.sh` compiles `dtb/rk3568-odroid-m1-npu.dts` into `/boot/dtb/rockchip/rk3568-odroid-m1-npu.dtb` and installs the overlay as `/boot/overlay-user/rknpu.dtbo`. Without them the NPU power domain stays off and the driver crashes on MMIO access.
+The supported boot configuration is split into two layers:
 
-## Features
+- `dtb/rk3568-odroid-m1-npu.dts` provides the base NPU, IOMMU, and OPP nodes
+- `overlays/rknpu.dts` enables PD6, regulator wiring, clocks, thermal bindings, and SRAM-related settings
 
-| Feature | Status |
-|---------|--------|
-| DRM render node `/dev/dri/renderD129` | ✅ Present |
-| IOMMU (translated mode) | ✅ |
-| Devfreq (DVFS, simple_ondemand) | ✅ |
-| Thermal throttling | ✅ |
-| `/dev/rknpu` misc device | ✅ |
-| Debugfs / Procfs | ✅ |
-| Fence sync | ✅ |
-| ODROID-M1 8 GB runtime | ✅ |
-| SCMI clock (200–1000 MHz) | ✅ |
-| SRAM acceleration (44 KB) | ✅ |
+Without this DTB and overlay combination the NPU power domain does not come up in the required runtime state.
+
+## Known Limitations
+
+- The RKNN userspace library hardcodes the `system` DMA heap name, so the installer provides a udev symlink to `dma32`
+- `vdd_npu` must remain `regulator-always-on`; disabling it causes a PD6 power-domain crash
+- SCMI reports approximate low-end frequencies such as `198/297/396 MHz`
+- Frequencies above `1000 MHz` are not supported on this board and firmware combination
 
 ## Tested With
 
 - **Board:** ODROID-M1 8 GB
-- **Kernel:** 6.18.9-current-rockchip64 (Armbian)
-- **RKNN SDK:** 2.4.0
-- **Driver version:** 0.9.8
-- **Inference:** YOLOv5s 42.4 ms avg @ 1000 MHz, YOLO11n working
+- **Kernel:** `6.18.9-current-rockchip64`
+- **RKNN SDK/runtime:** `2.4.0`
+- **DKMS package version:** `1.0`
+- **Runtime driver string:** `0.9.8`
 
 ## License
 

@@ -96,23 +96,31 @@ This driver uses SCMI exclusively for all frequencies (200–1000 MHz). The earl
 
 ## Driver State
 
-**Version:** RKNPU v0.9.8 DKMS
+**Version:** RKNPU runtime `0.9.8`, DKMS package `1.0`
 **Tested with:** RKNN SDK 2.4.0
 
 ### Working Features
 
 | Feature | Notes |
 |---------|-------|
-| DRM render node | `/dev/dri/renderD129` present; dedicated GEM userspace path still needs separate validation |
+| DRM render node | Validated with `tests/test_drm_gem.c`; stable path is `/dev/dri/by-path/platform-fde40000.npu-render` |
 | Misc device | `/dev/rknpu` — direct alloc + DMA-BUF import |
 | IOMMU | rk3568-iommu v2, translated mode |
-| Devfreq (DVFS) | Governors: simple_ondemand (default), performance, powersave, userspace |
+| Devfreq (DVFS) | Governors: simple_ondemand (default), performance, powersave, userspace; DKMS path uses sampled busy time with active fallback |
 | Thermal throttling | Dual-zone: cpu-thermal + gpu-thermal, 75°C trip |
 | Debugfs | `/sys/kernel/debug/rknpu/` — 14 entries |
 | Procfs | `/proc/rknpu/` — 8 entries |
 | Fence sync | DRM syncobj / sync_file |
 | SRAM | 44 KB, configurable 0–100% split with rkvdec via `RKNPU_SRAM_PERCENT` |
 | ODROID-M1 8 GB runtime | Full ~7.5 GB accessible on the target board |
+
+### Accepted Driver-Side Optimizations
+
+- `rknpu_job` allocation uses a slab cache
+- DKMS GEM range tracking uses a slab cache
+- misc-device session memory lookup uses an `obj_addr` hash
+- `MEM_SYNC` uses a single-SG fast path when possible
+- busy-time-based devfreq status is active in the DKMS path
 
 ### Armbian Support
 
@@ -145,7 +153,6 @@ C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead.
 | `regulator-always-on` on vdd_npu | Required — disabling it causes a PD6 power domain crash |
 | SCMI low-end frequency accuracy | Reports 198/297/396 MHz instead of 200/300/400 — cosmetic only |
 | SCMI above 1000 MHz | 1100 MHz silently maps to 594 MHz; 1188 MHz crashes the board |
-| DRM render node userspace path | `/dev/dri/renderD129` is present, but dedicated GEM userspace create/map validation is still pending. |
 
 ---
 
@@ -157,8 +164,10 @@ C API measures `rknn_run()` only. Python includes ~47 ms rknnlite overhead.
 - Remove `CONFIG_NO_GKI` guards — DKMS on Armbian is always non-GKI
 
 ### Performance
-- Use `kmem_cache` for `rknpu_job` allocation instead of `kzalloc` per submit
-- Replace the linear list scan in `rknpu_dkms_find_gem_obj_by_addr` with a hash table
+- Replace the linear scan in `rknpu_dkms_find_gem_obj_by_addr` with a hash table
+- Simplify the self-owned DMA-BUF attach/map path in `rknpu_mem.c`
+- Evaluate a buffer pool only if allocation-heavy workloads justify it
 
 ### Validation
-- End-to-end test on a fresh Armbian May 2026 release-stream image
+- End-to-end test on a fresh supported Armbian image
+- Keep using the idle-aware pinned benchmark wrapper for regression checks

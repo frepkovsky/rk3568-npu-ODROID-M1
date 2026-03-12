@@ -1,404 +1,134 @@
-# PLAN2 — First Clean State and First Release Plan
+# PLAN2 — Current Release and Documentation Roadmap
 
-> This plan is based on a full read of all repository Markdown docs:
-> `README.md`, `FEATURES.md`, `OPTIMIZATION.md`, `PLAN1.md`, `2026-02-27-TODO.md`, `AGENTS.md`.
->
-> Goal: get the project to a clean, internally consistent, first-release-ready state.
-> Constraint for this step: **no code changes yet**. This file is the plan only.
+This file captures the current remaining release work after the driver, installer, and core runtime documentation have already been aligned to the accepted codebase.
 
 ---
 
-## 1. Executive Summary
+## 1. Current Project Position
 
-The project already looks technically strong.
+The repository is now in a much cleaner state than the earlier planning phase.
 
-What is clearly present already:
-- DKMS packaging for the main `rknpu` module
-- Separate `dma32-heap` DKMS module for the 8 GB constraint
-- Working installer (`install.sh`)
-- Real hardware/benchmark notes
-- Good deep technical documentation
-- Explicit known limitations and future work
-- Small manual test utilities under `tests/`
+### Already established
 
-What is **not** clean enough yet for a first public release:
-- The documentation is internally inconsistent in several important places
-- Release metadata is incomplete
-- Validation is described, but not yet packaged as a reproducible release checklist
-- The repo still contains historical/transition-state information that is useful for development but noisy for a first release
+- user-facing install and verification docs describe the current supported boot model
+- `FEATURES.md` reflects the current runtime and validated feature set
+- `OPTIMIZATION-2.md` distinguishes landed optimizations from remaining work
+- the accepted optimization stack is already part of `main`
+- runtime validation exists for misc direct allocation, DRM GEM create/map, and idle-aware benchmarks on the target board
 
-Conclusion:
-- **The driver itself appears close to releasable**
-- **The repository is not yet documentation-clean or release-clean**
-- The first release should focus on **consistency, validation, packaging hygiene, and user-facing clarity** before more optimization work
+### Still worth finishing before a polished public release
+
+- add missing release artifacts such as a root `LICENSE` file and release notes
+- add a clean validation document for fresh-system testing
+- decide how versioning is presented to users when DKMS package version and runtime driver string differ
+- keep internal or historical documents clearly separate from user-facing docs
 
 ---
 
-## 2. Main Findings
+## 2. Documentation Roles
 
-## 2.1 What is missing
+The top-level documentation should now be treated as follows:
 
-### A. Root release artifacts are missing
-- No root `LICENSE` file was found
-- No `CHANGELOG` / release notes file was found
-- No dedicated release checklist doc exists as a stable user-facing document
-- No explicit uninstall / rollback document exists
+- `README.md`
+  - authoritative install, verify, support, and limitation document
+- `FEATURES.md`
+  - technical capability matrix and runtime feature inventory
+- `OPTIMIZATION-2.md`
+  - current optimization backlog only
+- `AGENTS.md`
+  - contributor and assistant context only
+- `PLAN2.md`
+  - current release and documentation roadmap
 
-### B. Documentation architecture is not clean yet
-Current docs mix three kinds of content:
-- user-facing install/verify documentation
-- developer/internal analysis
-- historical investigation notes
-
-For a first release this should be separated more clearly.
-
-### C. Validation is not yet release-grade
-There are useful manual test artifacts:
-- `tests/test_direct_alloc.c`
-- `tests/bench_yolov5.py`
-- `tests/thermal_info.sh`
-
-But what is missing is a single reproducible validation flow that answers:
-- what must pass before release
-- on which board/kernel/userspace combination it was tested
-- what exact outputs are expected
-- which findings are mandatory vs optional
-
-### D. Versioning is inconsistent
-Observed versions:
-- docs say `RKNPU v0.9.8`
-- DKMS package version is `1.0`
-- installer uses DKMS version `1.0`
-
-Before first release there must be one explicit versioning decision.
+Historical planning or investigation notes should stay clearly framed as internal history rather than active release guidance.
 
 ---
 
-## 2.2 What is contradictory right now
+## 3. Remaining Release Deliverables
 
-### A. DT / boot configuration story is contradictory
-There is a major inconsistency between docs and installer behavior.
+### High priority
 
-Evidence:
-- `README.md` says a custom DTB is included and installed
-- `install.sh` explicitly sets:
-  - `fdtfile=rockchip/rk3568-odroid-m1-npu.dtb`
-  - `user_overlays=rknpu`
-- `FEATURES.md` still mentions the same custom DTB override
-- `2026-02-27-TODO.md` says the current setup is already:
-  - stock DTB
-  - single overlay only
-  - **no `fdtfile` override needed**
-  - custom DTB removed
-
-This must be resolved before release because it affects installation safety and correctness.
-
-### B. IOMMU status is contradictory
-Evidence:
-- `README.md` says `IOMMU (translated mode)` is working
-- `FEATURES.md` says `IOMMU (translated mode)` is working
-- `AGENTS.md` previously described the IOMMU state incorrectly
-
-This was a release blocker at the documentation level because it changed how users understood memory constraints and risk. The final v1 documentation should state the verified runtime result directly: IOMMU translated mode is active on the target board.
-
-### C. README status vs current implementation is contradictory
-`PLAN1.md` already notes that the README is outdated.
-
-That confirms the repo itself already knows the user-facing doc is behind the actual implementation.
-
----
-
-## 2.3 What can be improved
-
-### A. Reduce historical noise in top-level docs
-Useful, but currently noisy for release:
-- `2026-02-27-TODO.md`
-- `PLAN1.md`
-- `OPTIMIZATION.md`
-
-These are valuable development documents, but a first release should make it obvious which docs are:
-- for users
-- for contributors
-- historical notes only
-
-### B. Provide a narrow, safe install story
-A first release should make these points unambiguous:
-- supported board(s)
-- supported kernel range
-- required userspace packages
-- whether stock Armbian DTB is enough
-- whether the installer edits boot config
-- how to revert changes
-- what exactly is expected after reboot
-
-### C. Formalize support matrix
-Minimum matrix to state explicitly:
-- board model / RAM variant
-- Armbian version family
-- kernel range actually validated
-- RKNN SDK version tested
-- known unsupported combinations
-
-### D. Make test utilities releasable
-Current state is development-friendly, not release-friendly.
-
-Examples:
-- `tests/bench_yolov5.py` contains a hardcoded local absolute model path
-- no single test runner / checklist ties the test artifacts together
-- expected pass criteria are not centrally documented
-
-### E. Distinguish blockers from future work
-A clean 1.0 should separate:
-- release blockers
-- post-1.0 cleanup
-- post-1.0 performance work
-- external blockers outside this repo
-
-The repo already contains this information, but it is spread across multiple docs.
-
----
-
-## 3. Release Readiness Assessment
-
-## 3.1 Ready enough already
-- Driver feature set appears broadly complete
-- Installation approach exists
-- DKMS packaging exists
-- Benchmarks and hardware notes exist
-- Known limitations are documented
-- There is already a strong technical narrative for why this repo exists
-
-## 3.2 Not ready enough yet
-- User-facing docs are not authoritative yet
-- Installer behavior and docs disagree
-- Version numbers disagree
-- No root license file
-- No changelog / release notes
-- No clean validation document for fresh-system testing
-
----
-
-## 4. Plan of Work
-
-## Phase 0 — Decide the authoritative truth
-
-### Goal
-Choose the exact current truth for installation and runtime architecture.
-
-### Must decide
-- Is the release based on **custom DTB + overlay**, or **stock DTB + overlay only**?
-- Is IOMMU translated mode actually enabled in the shipping configuration, or not?
-- Is the release version `0.9.8`, `1.0`, or `1.0.0`?
-
-### Output
-A short authoritative decision record that all docs and scripts will follow.
-
-### Priority
-**Blocker**
-
----
-
-## Phase 1 — Clean the repository for a first public release
-
-### Goal
-Turn the repo from “working engineering repo” into “releasable project repo”.
-
-### Tasks
-1. Add root `LICENSE`
+1. Add a root `LICENSE`
 2. Add `CHANGELOG.md` or `RELEASE_NOTES.md`
-3. Add a release-oriented validation doc
-4. Add uninstall / rollback documentation
-5. Reorganize doc roles:
-   - `README.md` = install + verify + support matrix + limitations
-   - `FEATURES.md` = technical capability matrix
-   - `AGENTS.md` = contributor/agent context only
-   - `PLAN1.md`, `2026-02-27-TODO.md`, `OPTIMIZATION.md` = clearly marked as internal or archival
+3. Add a release-oriented validation document
 
-### Priority
-**High**
+### Good follow-up
+
+1. Add a dedicated uninstall or rollback document if the README section proves too short
+2. Add a concise support matrix and validation checklist document for new users
+3. Mark purely historical docs more explicitly if they remain in the repository
 
 ---
 
-## Phase 2 — Fix all documentation contradictions
+## 4. Validation Roadmap
 
-### Goal
-Make the repo internally consistent.
+The release validation flow should document one supported reference environment and one repeatable pass criteria set.
 
-### Required fixes
-1. Align DT/overlay/install story across:
-   - `README.md`
-   - `FEATURES.md`
-   - `install.sh`
-   - any release notes
-2. Align IOMMU wording everywhere
-3. Align versioning everywhere
-4. Align verification commands and expected outputs
-5. Remove or label stale claims clearly
+### Reference environment
 
-### Definition of done
-A new reader should be able to answer these questions from the repo without ambiguity:
-- What exactly gets installed?
-- What boot configuration changes happen?
-- Does the system need a custom DTB?
-- Is IOMMU on or off in the release configuration?
-- What version am I installing?
+- board: ODROID-M1 8 GB
+- OS family: Armbian May 2026 release stream or newer
+- kernel baseline: `6.18.9-current-rockchip64`
+- RKNN SDK/runtime: `2.4.0`
 
-### Priority
-**Blocker**
+### Minimum validation checklist
 
----
+1. install dependencies
+2. run `install.sh`
+3. reboot
+4. confirm `rknpu` and `dma32_heap` are loaded
+5. confirm `/dev/rknpu`
+6. confirm `/dev/dri/by-path/platform-fde40000.npu-render`
+7. confirm `/dev/dma_heap/system -> /dev/dma_heap/dma32`
+8. confirm `/sys/class/devfreq/fde40000.npu`
+9. run `tests/test_direct_alloc.c`
+10. run `tests/test_drm_gem.c`
+11. run at least one benchmark or smoke test
 
-## Phase 3 — Make validation reproducible
+### Benchmark guidance
 
-### Goal
-Have a clean “fresh system” release validation process.
+Use the idle-aware pinned wrapper for driver performance comparisons:
 
-### Tasks
-1. Define one validation environment:
-   - board
-   - RAM size
-   - Armbian image
-   - kernel version
-   - RKNN SDK/runtime version
-2. Create a step-by-step validation checklist:
-   - install dependencies
-   - run installer
-   - reboot
-   - confirm module load
-   - confirm device nodes
-   - confirm dma heap symlink
-   - confirm devfreq entries
-   - confirm thermal bindings
-   - run direct allocation/import test
-   - run at least one benchmark smoke test
-3. Record expected outputs / success criteria
-4. Record known acceptable deviations
+- `tests/bench_yolov5_pinned.sh`
 
-### Nice follow-up
-Wrap the current manual tests into a documented validation workflow.
-
-### Priority
-**High**
+That benchmark path is the current accepted measurement baseline for regression checks.
 
 ---
 
-## Phase 4 — Do the minimal code/doc hygiene needed for 1.0
+## 5. Versioning Note
 
-### Goal
-Ship a first clean release without scope creep.
+The repository currently has two version identifiers with different meanings:
 
-### In scope before first release
-- Documentation corrections
-- Installer correction if docs prove it is outdated
-- Version normalization
-- Release artifacts
-- Validation pass on a fresh system
+- DKMS package version: `1.0`
+- runtime driver string: `0.9.8`
 
-### Explicitly not required before first release
-- Major performance redesign
-- IOMMU/kernel-side research outside this repo
-- zero-copy pipeline work
-- deep allocator refactors
-- aggressive cleanup that risks destabilizing a now-working driver
-
-### Priority
-**High**
+That is acceptable if it is documented consistently. The remaining work is not to change it blindly, but to describe it clearly in release-oriented docs and release notes.
 
 ---
 
-## Phase 5 — Post-1.0 cleanup and improvement track
+## 6. Post-Release Engineering Track
 
-These are worthwhile, but should not block the first release unless they expose correctness issues.
+These items remain useful after documentation and release artifacts are complete:
 
-### Cleanup candidates
+### Cleanup
+
 - remove old kernel compatibility guards
 - remove `FPGA_PLATFORM` guards
 - remove `CONFIG_NO_GKI` guards
-- remove stale/dead code paths
 
-### Medium-risk performance work
-- `kmem_cache` for `rknpu_job`
-- `kmem_cache` for GEM tracking structs
+### Performance follow-up
+
 - hash table for GEM address lookup
-- hash/xarray for mem sync lookup
-
-### Future / external work
-- real load tracking via hardware counters
-- buffer pool optimization
-- skip redundant DMA-BUF attach/map path
-- kernel-side IOMMU fix for full translated mode
-
-### Priority
-**After first release**
+- simplify the self-owned DMA-BUF attach and map path
+- evaluate a buffer pool only if allocation-heavy workloads justify it
+- reduce complexity in the load-accounting story only if it stays runtime-neutral
 
 ---
 
-## 5. Proposed Release Order
+## 7. Recommended Next Steps
 
-1. Resolve architecture truth and version truth
-2. Fix installer/doc contradictions
-3. Add missing release files (`LICENSE`, changelog, validation doc)
-4. Clean README into authoritative quickstart
-5. Run fresh-system validation
-6. Cut first release tag
-7. Move remaining code cleanup/perf items to post-release backlog
-
----
-
-## 6. Concrete Deliverables for the Next Editing Session
-
-## Mandatory
-- Updated `README.md`
-- Updated `FEATURES.md`
-- Possibly updated `install.sh` if it conflicts with the decided install model
-- New root `LICENSE`
-- New `CHANGELOG.md` or `RELEASE_NOTES.md`
-- New release validation document
-- Optional `UNINSTALL.md` or rollback section in `README.md`
-
-## Optional but recommended
-- Mark `PLAN1.md`, `OPTIMIZATION.md`, and `2026-02-27-TODO.md` as internal/history docs
-- Add a short support matrix section to `README.md`
-- Normalize version strings in all docs and package files
-
----
-
-## 7. Recommended First Release Positioning
-
-Suggested framing:
-- first public release for **ODROID-M1 only**
-- use **Armbian May 2026 release stream or newer**
-- repo kernel target **6.18+**
-- tested with **RKNN SDK 2.4.0**
-- clearly document the final runtime configuration without transitional workaround history
-- clearly document all non-goals and hard hardware/firmware limits
-
-This keeps the release narrow, believable, and easier to support.
-
----
-
-## 8. Release Blockers
-
-The following should be treated as blockers before tagging the first release:
-
-1. DTB / overlay / boot-config contradiction
-2. IOMMU status contradiction
-3. version mismatch (`0.9.8` vs `1.0`)
-4. missing root license file
-5. missing changelog / release notes
-6. no fresh-install validation record
-
----
-
-## 9. Final Recommendation
-
-Do **not** spend the next session on more optimization first.
-
-The best next step is:
-- decide the authoritative install/runtime story
-- align docs and installer with that truth
-- add missing release artifacts
-- validate on a fresh system
-- only then cut the first release
-
-That will produce a much cleaner and more trustworthy `v1.0.0` than adding more technical work before the repo itself is coherent.
+1. add the missing release artifacts
+2. add the fresh-system validation document
+3. keep user docs minimal and authoritative
+4. leave historical investigation details out of release-facing docs
+5. continue cleanup and optimization work only after the release surface is complete
